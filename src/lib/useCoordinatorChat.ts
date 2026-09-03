@@ -463,7 +463,7 @@ export function useCoordinatorChat(
 
   const handleContinue = useCallback(() => {
     setContinuePrompt(null);
-    sendMessage("Devam et, sonraki adımları tamamla.");
+    sendMessage("Kaldığın yerden hiçbir tekrar yapmadan doğrudan devam et.");
   }, [sendMessage]);
 
   const respondPermission = useCallback(

@@ -604,7 +604,7 @@ export async function POST(req: NextRequest) {
             ? `ÖNEMLİ KURALLAR:
 1. İLETİŞİM & ŞEFFAFLIK: Kullanıcıya hangi adımda olduğunu ve sıradaki eylemini 1-2 cümleyle açıkla (Örn: "Paketler kuruldu, şimdi Todo sayfasının kodlarını yazıyorum..."). Sakın sadece sessizce araç çağırma!
 2. KOD ÜRETİMİ: Eğer paket kurulumu bittiyse ve kodlar henüz yazılmadıysa, istenen uygulamanın çalışan kaynak kodlarını (dosya yolu etiketli eksiksiz kod blokları halinde: \`\`\`typescript\n// src/app/page.tsx\n...\`\`\`) MUTLAKA üret. İşi sadece npm install ile yarım bırakma.
-3. TÜM ADIMLAR BİTTİYSE: Başka araca gerek kalmadıysa ASLA yeni araç çağırma. Kullanıcıya 1) Yapılan işlemleri, 2) Dosya yollarını, 3) Terminal çalıştırma komutunu ('npm run dev') ve 4) Devam önerisini ("Yeni özellik eklemek veya sonraki adıma geçmek için 'Devam et' diyebilirsiniz") içeren Türkçe nihai teslim raporunu sun.`
+3. TÜM ADIMLAR BİTTİYSE: Başka araca gerek kalmadıysa ASLA yeni araç çağırma. Kullanıcıya 1) Yapılan işlemleri, 2) Dosya yollarını, 3) Terminal çalıştırma komutunu ('npm run dev') ve 4) Sonraki Adımları (Yeni bir özellik veya soru için hazır olduğunu) içeren Türkçe nihai teslim raporunu sun.`
             : `ÖNEMLİ KURAL: Yukarıdaki araç çıktılarını incele. Başka bir araca kesinlikle ihtiyaç yoksa veya yeterli bilgiye ulaştıysan ASLA yeni bir araç çağırma; kullanıcıya doğrudan net, detaylı ve Türkçe nihai yanıtını sun.`;
 
           currentMessages.push({
@@ -627,7 +627,7 @@ Kullanıcıya projeyi teslim etmek üzere MUTLAKA şu 4 bölümü içeren samimi
 1) ✅ **Tamamlanan İşlemler**: Neler yapıldı ve kuruldu?
 2) 📁 **Oluşturulan/Düzenlenen Dosyalar**: Dosya yolları ve içerikleri (ne işe yaradıkları).
 3) 🚀 **Nasıl Çalıştırılır**: Terminal komutları (örn. \`cd <klasör> && npm run dev\`) ve tarayıcı adresi.
-4) 💡 **Devam Önerisi**: "Bu aşama tamamlandı. Kalan kısımlara (yeni özellikler, testler veya ek sayfalar) devam etmemi isterseniz 'Devam et' diyebilirsiniz."`
+4) 💡 **Sonraki Adımlar**: Projeyi geliştirmek veya yeni bir özellik eklemek isterse yardımcı olabileceğini belirten profesyonel bir kapanış.`
             : `Araç çalıştırma adımları tamamlandı. Artık KESİNLİKLE hiçbir araç çağırma (\`tool_call\` üretme). Yukarıda elde ettiğin tüm bilgileri toplayarak kullanıcıya doğrudan, net, kapsamlı ve Türkçe nihai yanıtını sun. Cümleleri asla iki nokta (:) ile havada bırakma.`;
 
           currentMessages.push({
@@ -768,21 +768,21 @@ Kullanıcıya projeyi teslim etmek üzere MUTLAKA şu 4 bölümü içeren samimi
         enqueue(sseLine("activity", actGroup));
 
         // ── 11. Devam Etme (Continuation) Tespiti ─────────────────────────
-        // SADECE VE SADECE işlem gerçekten yarıda kaldıysa (token/context yetmediğinde) tetiklenir:
-        // 1. Model token sınırına ulaştığı için kesildiyse (hitTokenLimit)
-        // 2. Kod bloğu kapatılamadan kesildiyse (hasUnclosedFence)
-        // 3. Çok adımlı araç döngüsü limite takılıp henüz tamamlanamadıysa (iteration >= MAX_TOOL_ITERATIONS && !finalAnswerProduced)
+        // SADECE VE SADECE model gerçekten token sınırına takıldıysa (hitTokenLimit === true)
+        // VEYA çok adımlı araç döngüsü limite takılıp henüz nihai yanıt verilemediyse (reachedMaxIterationsIncomplete === true):
+        // Model doğal olarak durduysa (finishReason === "stop" -> hitTokenLimit === false),
+        // yanıttaki herhangi bir tekil backtick veya markdown formatlama hatası asla bir token kesintisi değildir!
         const backtickCount = (fullText.match(/```/g) || []).length;
         const hasUnclosedFence = backtickCount % 2 !== 0;
         const reachedMaxIterationsIncomplete = iteration >= MAX_TOOL_ITERATIONS && !finalAnswerProduced;
-        const isTruncated = hitTokenLimit || hasUnclosedFence;
+        const isTruncated = hitTokenLimit;
 
         if (isTruncated || reachedMaxIterationsIncomplete) {
           enqueue(
             sseLine("continue_prompt", {
               needed: true,
               message: hasUnclosedFence
-                ? "Kod çıktısı token/bağlam sınırına ulaştığı için yarıda kaldı. Kaldığı yerden devam etmek için tıklayın."
+                ? "Kod çıktısı modelin token/bağlam sınırına ulaştığı için yarıda kesildi. Kaldığı yerden devam etmek için tıklayın."
                 : (hitTokenLimit
                   ? "Yanıt modelin çıktı token sınırına ulaştığı için yarıda kesildi. Kaldığı yerden devam etmek için tıklayın."
                   : "İşlem adım sınırına ulaştı ve yarıda kaldı. Devam etmek için tıklayın."),

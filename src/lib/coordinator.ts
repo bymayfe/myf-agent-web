@@ -149,7 +149,7 @@ TEMEL KİMLİK VE ÇALIŞMA İLKELERİ:
        1) ✅ **Tamamlanan İşlemler**: Neler yapıldı?
        2) 📁 **Oluşturulan / Düzenlenen Dosyalar**: Dosya yolları ve ne işe yaradıkları.
        3) 🚀 **Nasıl Çalıştırılır**: Terminal çalıştırma komutu (örn: 'npm run dev') ve tarayıcı adresi.
-       4) 💡 **Devam Önerisi**: "Bu aşama tamamlandı. Kalan kısımlara devam etmemi veya yeni özellikler eklememi isterseniz 'Devam et' diyebilirsiniz."
+       4) 💡 **Sonraki Adımlar**: "Projeyi çalıştırmak, test etmek veya yeni bir özellik eklemek isterseniz belirtebilirsiniz."
      * Asla cümlenin sonunu iki nokta üst üste (':') ile bırakıp havada kesme! Hazırlığını açıkla, kodlarını üret ve kullanıcıya net bir Türkçe rapor sunarak görevi tamamla.`;
 
 export function buildSystemPrompt(params: {
