@@ -397,8 +397,10 @@ export async function POST(req: NextRequest) {
         let executedAnyTool = false;
         let finalAnswerProduced = false;
         let hitTokenLimit = false;
-        let buildVerified = false; // build/tsc komutu başarılı çalıştı mı?
-        const isCreationRequestGlobal = /yap|oluştur|yaz|geliştir|kur|proje|uygulama|tasarla|sayfa|todo|app\b/i.test(userPrompt);
+        let buildVerified = false; // derleme/doğrulama komutu başarılı çalıştı mı?
+        // Farklı dil/framework'lerde build/doğrulama komutlarını tanıyan evrensel regex:
+        const BUILD_CMD_RE = /\b(?:npm\s+run\s+(?:build|test|check)|next\s+build|npx\s+tsc|tsc\s+--noEmit|go\s+(?:build|vet|test)|cargo\s+(?:build|check|test)|python\s+-m\s+(?:py_compile|pytest|mypy|pylint|unittest)|pytest|mypy|pylint|mvn\s+(?:compile|package|test|verify)|gradle\s+(?:build|assemble|test)|dotnet\s+(?:build|run|test)|javac\b|make\b|cmake\s+--build|bundle\s+exec|php\s+-l|ruby\s+-c|mix\s+(?:compile|test)|swift\s+build|deno\s+(?:check|test)|bun\s+(?:build|test))\b/;
+        const isCreationRequestGlobal = /yap|oluştur|yaz|geliştir|kur|proje|uygulama|tasarla|sayfa|todo|script|bot|api|servis|server|cli\b|app\b/i.test(userPrompt);
 
         while (iteration < MAX_TOOL_ITERATIONS) {
           iteration++;
@@ -499,7 +501,7 @@ export async function POST(req: NextRequest) {
               .replace(/```tool_result[\s\S]*?```/gi, "")
               .trim();
 
-            // Kodlama/proje talebi için: dosyalar yazıldı mı ama hiç build/tsc doğrulaması yapılmadı mı?
+            // Kodlama/proje talebi için: dosyalar yazıldı ama hiç build/doğrulama yapılmadı mı?
             // Eğer öyleyse, modeli doğrulama adımına zorla
             if (
               isCreationRequestGlobal &&
@@ -507,11 +509,22 @@ export async function POST(req: NextRequest) {
               !buildVerified &&
               iteration < MAX_TOOL_ITERATIONS - 1
             ) {
-              // Model konuşmaya döktü ama hiç build çalıştırmadı — onu zorlayalım
+              // Model konuşmaya döktü ama hiç build/doğrulama çalıştırmadı — onu zorlayalım
               currentMessages.push({ role: "assistant", content: turnContent });
               currentMessages.push({
                 role: "user",
-                content: `[SİSTEM - KRİTİK ADIM HATIRLATICI]\n✅ Kodlar yazıldı. Ancak henüz derleme/syntax doğrulaması yapılmadı.\nŞimdi MUTLAKA şu komutu çalıştır:\n\`\`\`tool_call\n{"tool": "run_command", "parameters": {"command": "cd ${pluginContext.projectDir} && npm run build 2>&1 | tail -30"}}\n\`\`\`\nBuild başarılıysa kullanıcıya teslim raporu sun. Hata varsa düzelt.`,
+                content: `[SİSTEM - KRİTİK ADIM HATIRLATICI]
+✅ Kodlar yazıldı. Ancak henüz derleme/syntax doğrulaması yapılmadı.
+Kullandığın dile/framework'e uygun doğrulama komutunu HEMEN çalıştır. Örneğin:
+- Node.js / Next.js / React: \`npm run build\` veya \`npx tsc --noEmit\`
+- Python: \`python -m py_compile <dosya>\` veya \`python -m pytest\` veya \`mypy .\`
+- Go: \`go build ./...\` veya \`go vet ./...\`
+- Rust: \`cargo check\` veya \`cargo build\`
+- Java/Maven: \`mvn compile\` veya \`mvn test\`
+- .NET/C#: \`dotnet build\`
+- Diğerleri: Dile özel derleme/lint/test komutunu çalıştır.
+
+Doğrulama başarılıysa kullanıcıya teslim raporu sun. Hata varsa düzelt.`,
               });
               continue;
             }
@@ -613,10 +626,9 @@ export async function POST(req: NextRequest) {
                 if (lines.length > 25) {
                   llmOutputSummary = `(Komut başarıyla bitti, toplam ${lines.length} satır. Son 25 satır):\n${lines.slice(-25).join("\n")}`;
                 }
-                // Build/tsc doğrulaması başarılıysa işaretle
+                // Build/derleme doğrulaması başarılıysa işaretle (dil-agnostik)
                 const executedCmd = String(call.parameters.command || "");
-                const isBuildCmd = /\b(?:npm\s+run\s+build|next\s+build|tsc\s+--noEmit|npx\s+tsc)\b/.test(executedCmd);
-                if (isBuildCmd) {
+                if (BUILD_CMD_RE.test(executedCmd)) {
                   buildVerified = true;
                 }
               }
@@ -640,19 +652,24 @@ export async function POST(req: NextRequest) {
             role: "assistant",
             content: turnContent,
           });
-          const isCreationRequest = /yap|oluştur|yaz|geliştir|kur|kod|proje|uygulama|tasarla|sayfa|todo|app\b/i.test(userPrompt);
+          const isCreationRequest = /yap|oluştur|yaz|geliştir|kur|kod|proje|uygulama|tasarla|sayfa|todo|script|bot|api|servis|server|cli\b|app\b/i.test(userPrompt);
           const feedbackRule = isCreationRequest
             ? `ÖNEMLİ KURALLAR (PROJE TAMAMLAMA AKIŞI):
-MEVCUT DURUM: Adım ${iteration} tamamlandı. Build doğrulandı: ${buildVerified ? "EVET ✅" : "HAYIR ❌"}
+MEVCUT DURUM: Adım ${iteration} tamamlandı. Derleme/doğrulama yapıldı: ${buildVerified ? "EVET ✅" : "HAYIR ❌"}
 
 ZORUNLU ADIM SIRASI (hangi adımda olduğunu kontrol et ve bir sonrakine geç):
-1. 📦 KURULUM: npm install / npx create-next-app (proje henüz yoksa)
-2. 💻 KOD YAZIMI: Tüm kaynak dosyalarını yazma (layout.tsx, page.tsx, globals.css, components vb.) — Çok sayıda dosya gerekiyorsa hepsini tek turda yaz!
-3. ✅ DERLEME VE DOĞRULAMA: \`npm run build\` VEYA \`npx tsc --noEmit\` ile hata yok mu kontrol et
-4. 🔧 HATA DÜZELTME: Build hatalıysa hatayı düzelt ve 3. adıma dön
-5. 📋 TESLİM RAPORU: Build başarılıysa kullanıcıya 4 bölümlü teslim raporu sun — BU ADIMA ULAŞMADAN KONUŞMAYI KAPATMA!
+1. 📦 KURULUM: Gerekli bağımlılıkları ve proje iskeletini kur (npm install, pip install, cargo init, go mod init vb.)
+2. 💻 KOD YAZIMI: Tüm kaynak dosyalarını eksiksiz yaz — Çok sayıda dosya gerekiyorsa hepsini tek turda üret!
+3. ✅ DERLEME VE DOĞRULAMA: Dile uygun komutu çalıştır:
+   - Node.js/TS/Next.js: \`npm run build\` veya \`npx tsc --noEmit\`
+   - Python: \`python -m py_compile <dosya>\` veya \`mypy .\` veya \`pytest\`
+   - Go: \`go build ./...\` veya \`go vet ./...\`
+   - Rust: \`cargo check\` veya \`cargo build\`
+   - Java/Maven: \`mvn compile\`  |  .NET/C#: \`dotnet build\`  |  Diğerleri: dile özel lint/build
+4. 🔧 HATA DÜZELTME: Hata varsa düzelt ve 3. adıma dön
+5. 📋 TESLİM RAPORU: Doğrulama başarılıysa kullanıcıya 4 bölümlü teslim raporu sun — BU ADIMA ULAŞMADAN KONUŞMAYI KAPATMA!
 
-${!buildVerified ? "⚠️ UYARI: Henüz build/tsc doğrulaması yapılmadı! Kodlar yazıldıysa şimdi build et. Kodlar henüz yazılmadıysa önce yaz, sonra build et." : "✅ Build başarılı! Şimdi kullanıcıya eksiksiz teslim raporunu sun (nasıl çalıştırılır, sonraki adımlar)."}
+${!buildVerified ? "⚠️ UYARI: Henüz derleme/doğrulama yapılmadı! Kodlar yazıldıysa şimdi dile uygun build/lint komutunu çalıştır." : "✅ Derleme başarılı! Şimdi kullanıcıya eksiksiz teslim raporunu sun."}
 Bir sonraki adım için HEMEN \`tool_call\` bloğuyla devam et. Yalnızca teslim raporu aşamasındaysan araç çağırma.`
             : `ÖNEMLİ KURAL: Yukarıdaki araç çıktılarını incele. Başka bir araca kesinlikle ihtiyaç yoksa veya yeterli bilgiye ulaştıysan ASLA yeni bir araç çağırma; kullanıcıya doğrudan net, detaylı ve Türkçe nihai yanıtını sun.`;
 
