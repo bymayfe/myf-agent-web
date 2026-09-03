@@ -13,15 +13,15 @@
 
 ## ✨ Temel Özellikler
 
-### 1. 📡 Çift Kanallı Canlı Akış (SSE Streaming & Antigravity Feed)
-- **Düşünme / Reasoning Blokları:** Modelin içsel mantığını (`<think>`) daraltılabilir, şık camgöbeği panellerde canlı gösterir.
+### 1. 📡 Sıfır Gecikmeli Canlı Akış & Düşünce Süreci (Zero-Lag Streaming)
+- **Canlı ve Otomatik Açılan Düşünme Blokları:** Model düşünürken mor düşünce kutusu (`<think>`) canlı olarak otomatik açılır, içeriğiyle birlikte en alta yumuşakça kayar (`auto-scroll`); düşünme bitince kendiliğinden toparlanıp şık bir rozet halini alır.
+- **Harf Harf Akış Garantisi:** Değişmez (immutable) React state mimarisi ve tamponsuz (unbuffered) HTTP SSE başlıkları ile her bir harf ve token anında ekrana yansır.
 - **Canlı Araç Çağrısı Kartları:** Dosya yazma (`write_file`), terminal komutu çalıştırma (`run_terminal`) ve web araması (`web_search`) kartlar halinde anlık olarak işlenir.
-- **İnter-Step İlerleme Anlatımı:** Her araç adımında ajan ne yaptığını ve bir sonraki adımı adım adım açıklar.
 
-### 2. ⚡ Kesintisiz Devam & Akıllı Bağlam Yönetimi
-- **Gerçek Token Limiti Algılama:** Model token sınırına ulaşıp yarıda kesildiğinde (`finish_reason === "length"` veya kapanmamış kod bloğu) anında tespit edilir.
-- **Claude / Antigravity Tarzı Devam Barı:** Normal bitişlerde kullanıcıyı gereksiz sorularla rahatsız etmez; yalnızca gerçek kesintilerde `[Devam Et]` barı çıkar.
-- **Canlı Bağlam Göstergesi (`Ctx: %XX`):** Token penceresinin doluluk oranını üst barda gerçek zamanlı renk kodlamasıyla (Yeşil/Sarı/Kırmızı) takip eder.
+### 2. 🛡️ Otonom Eylem & Lafta Kalmayı Önleme Motoru (Anti-Empty-Promise)
+- **Akıllı Komut Niyet Kurtarma (`Heuristic Recovery`):** Model JSON araç bloğu üretmeyip metin içerisinde *"şimdi `npx tsc --noEmit` ile kontrol ediyorum"* dediğinde, komut anında yakalanıp gerçek bir `run_command` terminal görevine dönüştürülür.
+- **Otomatik Yönlendirme ve Uyarı (Auto-Steering):** Model eylem vaat edip araç çağırmadığında, arka planda gizli sistem uyarısıyla anında çeki düzen verilir.
+- **Kesintisiz Devam (Seamless Continue):** Sadece model token limitine ulaştığında çıkan ve tıklandığında anında temizlenen şık devam barı ("✕" tek tıkla kapatma seçeneğiyle).
 
 ### 3. 🖥️ Entegre Arka Plan Terminali & Görev Yöneticisi
 - Uzun süren derleme ve sunucu süreçlerini (`npm run dev`, `cargo build` vb.) arka planda canlı izleme.

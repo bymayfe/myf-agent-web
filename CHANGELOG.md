@@ -4,6 +4,26 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.1.0] - 2026-09-04
+
+### ⚡ Canlı Akış, Düşünce Motoru ve Otonom Komut İyileştirmeleri
+
+#### 🧠 Gerçek Zamanlı Canlı Düşünce & Akış (Zero-Lag Streaming)
+- **Harf Harf Canlı Akış:** React 19'un aynı dizi referansı nedeniyle re-render'ı ertelemesi (bail-out) engellendi; her gelen düşünce ve metin token'ında değişmez (immutable) state güncellenerek ekranın anlık akması sağlandı.
+- **Canlı Açılan Düşünce Bloğu (`ThinkBlock`):** Model düşünürken mor düşünce kutusu artık otomatik olarak açık geliyor ve gelen token'larla en alta kayıyor (`auto-scroll`); düşünme bitip cevaba geçildiğinde kendiliğinden toparlanıyor.
+- **Tamponsuz HTTP Taşıma:** `route.ts` API yanıtlarına `X-Accel-Buffering: no` ve `Cache-Control: no-cache, no-transform` eklenerek ara katman tamponlaması sıfırlandı.
+
+#### 🛡️ Eylem Kurtarma ve Lafta Kalmayı Önleme Motoru (Anti-Empty-Promise Engine)
+- **Akıllı Komut Niyet Kurtarma (`Heuristic Intent Recovery`):** Model JSON araç bloğu üretmeyip sadece metin içerisinde *"Tamam, şimdi `npx tsc --noEmit` ile kontrol yapıyorum..."* dediğinde, komut anında yakalanıp otomatik gerçek bir `run_command` terminal görevine dönüştürülüyor.
+- **Otomatik Yönlendirme (Auto-Steering):** Model komut adı da vermeden sadece *"Tamam! Başlatıyorum..."* deyip durursa, sistem turu kesmeden arka planda modele derhal yönlendirici uyarı göndererek araç çağırmasını sağlıyor.
+- **Sertleştirilmiş Sistem Promptu:** Modele eylem cümlelerinin hemen altında araç çağırma zorunluluğu getirildi; kuru vaatler kesin olarak yasaklandı.
+
+#### 🎯 Kesintisiz Devam (Continue) Barı Düzeltmesi
+- Kullanıcı [Devam Et] butonuna bastığında alertin ekranda asılı kalması giderildi; `sessionStore` üzerinde kalıcı temizlik sağlandı.
+- İstemeyen kullanıcılar için tek tıkla kapatma sağlayan şık bir **"✕" (Dismiss)** butonu eklendi.
+
+---
+
 ## [1.0.0] - 2026-09-03
 
 ### 🎉 İlk Kararlı Sürüm (Initial Public Release)
