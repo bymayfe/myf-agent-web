@@ -108,13 +108,13 @@ export function useCoordinatorChat(
   );
 
   const syncActiveView = useCallback((state: SessionRuntimeState) => {
-    setMessages(state.messages);
+    setMessages([...state.messages]);
     setIsStreaming(state.isStreaming);
-    setTerminalTasks(state.terminalTasks);
+    setTerminalTasks([...state.terminalTasks]);
     setActiveTerminalTaskId(state.activeTerminalTaskId);
-    setActivityGroups(state.activityGroups);
-    setContinuePrompt(state.continuePrompt);
-    setPermissionRequest(state.permissionRequest);
+    setActivityGroups([...state.activityGroups]);
+    setContinuePrompt(state.continuePrompt ? { ...state.continuePrompt } : null);
+    setPermissionRequest(state.permissionRequest ? { ...state.permissionRequest } : null);
     setContextStatus(state.contextStatus ?? null);
   }, []);
 
@@ -357,26 +357,37 @@ export function useCoordinatorChat(
             const st = targetSessionId ? getOrCreateSessionState(targetSessionId) : null;
 
             if (st) {
+              const lastIdx = st.messages.length - 1;
+              const last = st.messages[lastIdx];
+
               if (frame.event === "content") {
-                const last = st.messages[st.messages.length - 1];
                 if (last && last.role === "assistant") {
-                  last.content += (frame.data as string);
-                  last.statusNote = undefined;
+                  st.messages[lastIdx] = {
+                    ...last,
+                    content: last.content + (frame.data as string),
+                    statusNote: undefined,
+                  };
                 }
               } else if (frame.event === "thinking") {
-                const last = st.messages[st.messages.length - 1];
                 if (last && last.role === "assistant") {
-                  last.thinking = (last.thinking ?? "") + (frame.data as string);
+                  st.messages[lastIdx] = {
+                    ...last,
+                    thinking: (last.thinking ?? "") + (frame.data as string),
+                  };
                 }
               } else if (frame.event === "status") {
-                const last = st.messages[st.messages.length - 1];
                 if (last && last.role === "assistant") {
-                  last.statusNote = frame.data as string;
+                  st.messages[lastIdx] = {
+                    ...last,
+                    statusNote: frame.data as string,
+                  };
                 }
               } else if (frame.event === "file_changes") {
-                const last = st.messages[st.messages.length - 1];
                 if (last && last.role === "assistant") {
-                  last.editedFiles = frame.data as EditedFile[];
+                  st.messages[lastIdx] = {
+                    ...last,
+                    editedFiles: frame.data as EditedFile[],
+                  };
                 }
               } else if (frame.event === "continue_prompt") {
                 const data = frame.data as { needed: boolean; message: string };

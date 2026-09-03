@@ -12,12 +12,21 @@ interface ThinkBlockProps {
 }
 
 export default function ThinkBlock({ content, isStreaming }: ThinkBlockProps) {
-  const [open, setOpen] = useState(false);
+  const [userToggled, setUserToggled] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
   const [durationSec, setDurationSec] = useState<number | null>(null);
 
   const startRef = useRef<number>(Date.now());
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Model aktif düşünürken (isStreaming) varsayılan olarak açık göster;
+  // düşünme bitince otomatik olarak şık bir rozet şeklinde toparla (kullanıcı elle değiştirmediyse)
+  const open = userToggled !== null ? userToggled : Boolean(isStreaming);
+
+  const toggleOpen = () => {
+    setUserToggled((prev) => (prev !== null ? !prev : !Boolean(isStreaming)));
+  };
 
   useEffect(() => {
     if (isStreaming) {
@@ -39,6 +48,13 @@ export default function ThinkBlock({ content, isStreaming }: ThinkBlockProps) {
     };
   }, [isStreaming]);
 
+  // Canlı düşünce akarken en alt satıra otomatik kaydır
+  useEffect(() => {
+    if (isStreaming && open && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [content, isStreaming, open]);
+
   if (!content || !content.trim()) return null;
 
   const lines = content.trim().split("\n");
@@ -57,11 +73,11 @@ export default function ThinkBlock({ content, isStreaming }: ThinkBlockProps) {
       <div
         role="button"
         tabIndex={0}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            setOpen((v) => !v);
+            toggleOpen();
           }
         }}
         className="w-full flex items-center justify-between px-3.5 py-2 text-purple-300/90 hover:bg-purple-900/20 transition-colors text-left font-mono cursor-pointer"
@@ -100,7 +116,10 @@ export default function ThinkBlock({ content, isStreaming }: ThinkBlockProps) {
       </div>
 
       {open && (
-        <div className="px-3.5 pb-3 pt-2 text-[11px] text-purple-100/80 whitespace-pre-wrap font-mono leading-relaxed border-t border-purple-900/30 bg-[#070512] max-h-80 overflow-y-auto select-text">
+        <div
+          ref={scrollRef}
+          className="px-3.5 pb-3 pt-2 text-[11px] text-purple-100/80 whitespace-pre-wrap font-mono leading-relaxed border-t border-purple-900/30 bg-[#070512] max-h-80 overflow-y-auto select-text"
+        >
           {content.trim()}
         </div>
       )}

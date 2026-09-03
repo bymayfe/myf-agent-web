@@ -41,6 +41,7 @@ import path from "path";
 import { promises as fs } from "fs";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function sseLine(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -890,8 +891,9 @@ Kullanıcıya projeyi teslim etmek üzere MUTLAKA şu 4 bölümü içeren samimi
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }
