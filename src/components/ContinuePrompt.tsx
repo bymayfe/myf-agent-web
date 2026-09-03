@@ -10,12 +10,14 @@ interface ContinuePromptProps {
   visible: boolean;
   message?: string;
   onContinue: () => void;
+  onDismiss?: () => void;
 }
 
 export default function ContinuePrompt({
   visible,
   message = "İşlem yarıda kaldı veya daha fazla adım var. Devam etmemi ister misin?",
   onContinue,
+  onDismiss,
 }: ContinuePromptProps) {
   if (!visible) return null;
 
@@ -31,13 +33,24 @@ export default function ContinuePrompt({
           </p>
         </div>
 
-        <button
-          onClick={onContinue}
-          className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold shadow-lg shadow-cyan-900/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
-        >
-          <Play size={14} fill="currentColor" />
-          <span>Devam Et</span>
-        </button>
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            onClick={onContinue}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold shadow-lg shadow-cyan-900/40 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+          >
+            <Play size={14} fill="currentColor" />
+            <span>Devam Et</span>
+          </button>
+          {onDismiss && (
+            <button
+              onClick={onDismiss}
+              title="Kapat"
+              className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800/80 transition-colors cursor-pointer"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

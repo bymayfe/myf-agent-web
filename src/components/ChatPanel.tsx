@@ -37,6 +37,7 @@ interface ChatPanelProps {
   onSend: (text: string) => void;
   onStop: () => void;
   onContinue?: () => void;
+  onDismissContinue?: () => void;
   onRetry?: (index?: number) => void;
   onUndo?: (index?: number) => void;
   onRespondPermission?: (decision: PermissionDecision) => void;
@@ -59,6 +60,7 @@ export default function ChatPanel({
   onSend,
   onStop,
   onContinue,
+  onDismissContinue,
   onRetry,
   onUndo,
   onRespondPermission,
@@ -184,6 +186,7 @@ export default function ChatPanel({
               visible={continuePrompt.visible}
               message={continuePrompt.message}
               onContinue={onContinue}
+              onDismiss={onDismissContinue}
             />
           )}
 

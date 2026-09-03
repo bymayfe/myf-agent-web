@@ -296,6 +296,8 @@ export function useCoordinatorChat(
         const st = getOrCreateSessionState(targetSessionId, newMessages);
         st.messages = newMessages;
         st.isStreaming = true;
+        st.continuePrompt = null;
+        st.permissionRequest = null;
         syncActiveView(st);
       } else {
         setMessages(newMessages);
@@ -463,8 +465,20 @@ export function useCoordinatorChat(
 
   const handleContinue = useCallback(() => {
     setContinuePrompt(null);
+    const activeId = currentSessionIdRef.current;
+    if (activeId && sessionStore.current.has(activeId)) {
+      sessionStore.current.get(activeId)!.continuePrompt = null;
+    }
     sendMessage("Kaldığın yerden hiçbir tekrar yapmadan doğrudan devam et.");
   }, [sendMessage]);
+
+  const dismissContinuePrompt = useCallback(() => {
+    setContinuePrompt(null);
+    const activeId = currentSessionIdRef.current;
+    if (activeId && sessionStore.current.has(activeId)) {
+      sessionStore.current.get(activeId)!.continuePrompt = null;
+    }
+  }, []);
 
   const respondPermission = useCallback(
     (decision: PermissionDecision) => {
@@ -651,6 +665,7 @@ export function useCoordinatorChat(
     setActiveTerminalTaskId,
     sendMessage,
     handleContinue,
+    dismissContinuePrompt,
     respondPermission,
     retry,
     undo,

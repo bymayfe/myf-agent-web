@@ -125,6 +125,7 @@ export default function Home() {
     setActiveTerminalTaskId,
     sendMessage,
     handleContinue,
+    dismissContinuePrompt,
     respondPermission,
     retry,
     undo,
@@ -361,6 +362,7 @@ export default function Home() {
           onSend={(text) => sendMessage(text, undefined, activeProjectDir || undefined)}
           onStop={stop}
           onContinue={handleContinue}
+          onDismissContinue={dismissContinuePrompt}
           onRetry={retry}
           onUndo={undo}
           onRespondPermission={respondPermission}
