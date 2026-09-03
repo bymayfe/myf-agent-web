@@ -140,6 +140,8 @@ export default function ChatPanel({
             statusNote={m.statusNote}
             editedFiles={m.editedFiles}
             sessionId={sessionId}
+            projectName={projectName}
+            isLatest={i === messages.length - 1}
             isStreaming={isStreaming && i === messages.length - 1 && m.role === "assistant"}
             onRetry={m.role === "assistant" && onRetry ? () => onRetry(i) : undefined}
             onUndo={onUndo ? () => onUndo(i) : undefined}

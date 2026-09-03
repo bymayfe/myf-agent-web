@@ -392,7 +392,7 @@ export async function POST(req: NextRequest) {
         fullAssembledContent = "";
         fullThinking = "";
         let currentMessages: ChatMessage[] = [...messages];
-        const MAX_TOOL_ITERATIONS = 8;
+        const MAX_TOOL_ITERATIONS = 15;
         let iteration = 0;
         let executedAnyTool = false;
         let finalAnswerProduced = false;
@@ -782,24 +782,19 @@ Kullanıcıya projeyi teslim etmek üzere MUTLAKA şu 4 bölümü içeren samimi
         enqueue(sseLine("activity", actGroup));
 
         // ── 11. Devam Etme (Continuation) Tespiti ─────────────────────────
-        // SADECE VE SADECE model gerçekten token sınırına takıldıysa (hitTokenLimit === true)
-        // VEYA çok adımlı araç döngüsü limite takılıp henüz nihai yanıt verilemediyse (reachedMaxIterationsIncomplete === true):
-        // Model doğal olarak durduysa (finishReason === "stop" -> hitTokenLimit === false),
-        // yanıttaki herhangi bir tekil backtick veya markdown formatlama hatası asla bir token kesintisi değildir!
+        // SADECE VE SADECE model gerçekten token sınırına takıldıysa (hitTokenLimit === true, yani finish_reason === "length"):
+        // Model doğal olarak durduysa (finishReason === "stop"), asla kesinti alerti basma!
         const backtickCount = (fullText.match(/```/g) || []).length;
         const hasUnclosedFence = backtickCount % 2 !== 0;
-        const reachedMaxIterationsIncomplete = iteration >= MAX_TOOL_ITERATIONS && !finalAnswerProduced;
         const isTruncated = hitTokenLimit;
 
-        if (isTruncated || reachedMaxIterationsIncomplete) {
+        if (isTruncated) {
           enqueue(
             sseLine("continue_prompt", {
               needed: true,
               message: hasUnclosedFence
                 ? "Kod çıktısı modelin token/bağlam sınırına ulaştığı için yarıda kesildi. Kaldığı yerden devam etmek için tıklayın."
-                : (hitTokenLimit
-                  ? "Yanıt modelin çıktı token sınırına ulaştığı için yarıda kesildi. Kaldığı yerden devam etmek için tıklayın."
-                  : "İşlem adım sınırına ulaştı ve yarıda kaldı. Devam etmek için tıklayın."),
+                : "Yanıt modelin çıktı token sınırına ulaştığı için yarıda kesildi. Kaldığı yerden devam etmek için tıklayın.",
             })
           );
         }
