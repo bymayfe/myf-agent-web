@@ -73,6 +73,15 @@ function DeleteSessionDialog({
   );
 }
 
+function isExplicitProject(dir?: string | null): boolean {
+  if (!dir) return false;
+  const trimmed = dir.trim();
+  if (!trimmed) return false;
+  if (trimmed.includes("agent_system/projects") || trimmed.includes("data/projects")) return false;
+  if (/[\\/]projects[\\/]\d{8}_\d{6}_/.test(trimmed)) return false;
+  return true;
+}
+
 export default function Home() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [providers, setProviders] = useState<ProvidersFile | null>(null);
@@ -145,13 +154,7 @@ export default function Home() {
         if (!res.ok) return;
         const data = await res.json().catch(() => ({}));
         if (data.session) {
-          const rawDir = (data.session.project_dir || "").trim();
-          const isExplicit = Boolean(
-            rawDir &&
-            !rawDir.includes("agent_system/projects") &&
-            !rawDir.includes("data/projects")
-          );
-          setActiveProjectDir(isExplicit ? rawDir : null);
+          setActiveProjectDir(isExplicitProject(data.session.project_dir) ? data.session.project_dir : null);
           const raw = data.session.conversation_history ?? [];
           const history = raw
             .filter((m: { role: string; content?: string }) => m.role !== "system" && m.content)
@@ -233,13 +236,7 @@ export default function Home() {
     if (!sessionToDelete) return;
     const { id, isRunning } = sessionToDelete;
     const s = sessions.find((item) => item.session_id === id);
-    const rawDir = (s?.project_dir || "").trim();
-    const isExplicit = Boolean(
-      rawDir &&
-      !rawDir.includes("agent_system/projects") &&
-      !rawDir.includes("data/projects")
-    );
-    const targetProjectDir = isExplicit ? rawDir : null;
+    const targetProjectDir = isExplicitProject(s?.project_dir) ? s!.project_dir : null;
 
     // 1. Eğer aktif işlem yürütülüyorsa veya silinen oturum aktifse, işlemi hemen durdur
     if (isRunning || activeSessionId === id) {
@@ -309,14 +306,9 @@ export default function Home() {
         }
       : null;
 
-  const rawCurrentDir = (currentProjectDir || "").trim();
-  const isExplicitCurrent = Boolean(
-    rawCurrentDir &&
-    !rawCurrentDir.includes("agent_system/projects") &&
-    !rawCurrentDir.includes("data/projects")
-  );
+  const isExplicitCurrent = isExplicitProject(currentProjectDir);
   const currentProjectName = isExplicitCurrent
-    ? rawCurrentDir.split("/").filter(Boolean).pop() || null
+    ? (currentProjectDir || "").trim().split("/").filter(Boolean).pop() || null
     : null;
 
   return (

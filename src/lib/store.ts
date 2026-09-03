@@ -4,9 +4,28 @@
 // Sunucu tarafında (Node runtime, route handler'lar) çalışır — istemciden import edilmez.
 
 import { promises as fs } from "fs";
+import fsSync from "fs";
 import path from "path";
 import type { Settings, ProvidersFile, SessionFile, SessionMeta, ProjectEntry } from "@/types";
 import { DEFAULT_PROVIDERS, DEFAULT_SETTINGS_JSON } from "./defaultProviders";
+
+export function getProjectsBaseDir(): string {
+  if (process.env.AGENT_PROJECTS_DIR) {
+    return path.resolve(process.env.AGENT_PROJECTS_DIR);
+  }
+  // 1. Monorepo kontrolü (CLI_Project/agent_system/projects)
+  const monorepo = path.resolve(process.cwd(), "..", "agent_system", "projects");
+  if (fsSync.existsSync(path.resolve(process.cwd(), "..", "agent_system"))) {
+    return monorepo;
+  }
+  // 2. Yan yana klonlanan repo kontrolü (../myf-agent-cli/agent_system/projects)
+  const siblingCli = path.resolve(process.cwd(), "..", "myf-agent-cli", "agent_system", "projects");
+  if (fsSync.existsSync(path.resolve(process.cwd(), "..", "myf-agent-cli", "agent_system"))) {
+    return siblingCli;
+  }
+  // 3. Standalone Next.js modu: Uygulama içindeki "projects" klasörü
+  return path.resolve(process.cwd(), "projects");
+}
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const SESSIONS_DIR = path.join(DATA_DIR, "sessions");
@@ -124,7 +143,8 @@ export async function createSession(title: string, slug: string, projectDir?: st
     const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     const cleanSlug = (slug || "yeni_proje").replace(/[^a-zA-Z0-9_\-]/g, "_").toLowerCase();
     const folderName = `${dateStr}_${cleanSlug}`;
-    resolvedDir = path.join(PROJECTS_BASE_DIR, folderName);
+    const baseDir = getProjectsBaseDir();
+    resolvedDir = path.join(baseDir, folderName);
     try {
       await fs.mkdir(resolvedDir, { recursive: true });
     } catch {
@@ -165,9 +185,10 @@ export async function updateSessionTitle(id: string, newTitle: string): Promise<
 
   // Eğer oturumun proje dizini PROJECTS_BASE_DIR içinde ve henüz "yeni_proje" ise,
   // Python CLI gibi klasör adını yeni başlığın slug'ı ile güncelle:
+  const baseDir = getProjectsBaseDir();
   if (
     session.project_dir &&
-    session.project_dir.includes("agent_system/projects") &&
+    (session.project_dir.startsWith(baseDir) || session.project_dir.includes("agent_system/projects") || session.project_dir.includes("/projects/")) &&
     session.project_dir.includes("yeni_proje")
   ) {
     const parentDir = path.dirname(session.project_dir);
