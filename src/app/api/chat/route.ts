@@ -478,6 +478,19 @@ export async function POST(req: NextRequest) {
           }
 
           if (toolCalls.length === 0) {
+            // Model başka araç çağırmadıysa:
+            // Kontrol et: Acaba model "başlatıyorum / yapıyorum / çalıştırıyorum / kontrol ediyorum" deyip lafta mı kaldı?
+            const EMPTY_PROMISE_RE = /\b(?:başlatıyorum|yapıyorum|çalıştırıyorum|kontrol\s*ediyorum|doğrulama\s*başlatıyorum|doğrulaması\s*başlatıyorum|test\s*ediyorum|inceliyorum|kurulumu\s*başlatıyorum|hemen\s*yapıyorum)\b/i;
+            const isJustEmptyPromise = EMPTY_PROMISE_RE.test(turnContent) && !turnContent.includes("```");
+            if (isJustEmptyPromise && iteration <= 2) {
+              messages.push({ role: "assistant", content: turnContent });
+              messages.push({
+                role: "user",
+                content: "⚠️ UYARI: İşlemi yapacağını/başlatacağını belirttin ancak çalıştırmak için hiçbir ```tool_call aracı çağırmadın! Lütfen sözde bırakma, yapacağını söylediğin işlemi HEMEN ```tool_call formatında çağır!",
+              });
+              continue;
+            }
+
             // Model başka araç çağırmadıysa, gerçekten kullanıcıya yönelik bir açıklama üretti mi kontrol et
             const cleanUserText = turnContent
               .replace(/```(?:tool_call|json:tool_call|tool)[\s\S]*?```/gi, "")

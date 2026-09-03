@@ -365,6 +365,32 @@ class PluginManager {
       }
     }
 
+    // 3. Akıllı Niyet Kurtarma (Heuristic Command Intent Recovery):
+    // Model "şimdi `npx tsc --noEmit` çalıştırıyorum" veya "npx tsc --noEmit ile syntax kontrolünü yapıyorum"
+    // deyip ```tool_call bloğunu unuttuysa, komutu yakala ve run_command aracına dönüştür
+    if (calls.length === 0) {
+      const inlineCmdPatterns = [
+        /(?:çalıştırıyorum|yapıyorum|başlatıyorum|kontrol\s*ediyorum|deniyorum)[^`\n]*`([a-zA-Z0-9_\-\.\/: ]+)`/i,
+        /`([a-zA-Z0-9_\-\.\/: ]+)`[^`\n]*(?:çalıştırıyorum|yapıyorum|başlatıyorum|kontrol\s*ediyorum|ile\s*kontrol|ile\s*syntax|doğruluyorum)/i,
+        /(?:başlatıyorum|yapıyorum|çalıştırıyorum|kontrol\s*ediyorum):\s*`([a-zA-Z0-9_\-\.\/: ]+)`/i,
+        /```(?:bash|sh|shell|zsh)\n([^\n]+)\n```/i,
+      ];
+      for (const pat of inlineCmdPatterns) {
+        const m = pat.exec(text);
+        if (m && m[1]) {
+          const candidateCmd = m[1].trim();
+          const SHELL_PREFIXES = /^(?:npm|npx|pnpm|yarn|git|python|pytest|tsc|cargo|go|node|ls|cat|rm|mkdir|curl|chmod|find|touch|cd|docker)\b/i;
+          if (SHELL_PREFIXES.test(candidateCmd) || candidateCmd.split(" ").length >= 2) {
+            calls.push({
+              tool: "run_command",
+              parameters: { command: candidateCmd },
+            });
+            break;
+          }
+        }
+      }
+    }
+
     return calls;
   }
 }
