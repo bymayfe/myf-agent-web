@@ -397,6 +397,8 @@ export async function POST(req: NextRequest) {
         let executedAnyTool = false;
         let finalAnswerProduced = false;
         let hitTokenLimit = false;
+        let buildVerified = false; // build/tsc komutu başarılı çalıştı mı?
+        const isCreationRequestGlobal = /yap|oluştur|yaz|geliştir|kur|proje|uygulama|tasarla|sayfa|todo|app\b/i.test(userPrompt);
 
         while (iteration < MAX_TOOL_ITERATIONS) {
           iteration++;
@@ -479,12 +481,12 @@ export async function POST(req: NextRequest) {
 
           if (toolCalls.length === 0) {
             // Model başka araç çağırmadıysa:
-            // Kontrol et: Acaba model "başlatıyorum / yapıyorum / çalıştırıyorum / kontrol ediyorum" deyip lafta mı kaldı?
+            // Kontrol et: Acaba model "başlatıyorum / yapıyorum..." deyip lafta mı kaldı?
             const EMPTY_PROMISE_RE = /\b(?:başlatıyorum|yapıyorum|çalıştırıyorum|kontrol\s*ediyorum|doğrulama\s*başlatıyorum|doğrulaması\s*başlatıyorum|test\s*ediyorum|inceliyorum|kurulumu\s*başlatıyorum|hemen\s*yapıyorum)\b/i;
             const isJustEmptyPromise = EMPTY_PROMISE_RE.test(turnContent) && !turnContent.includes("```");
-            if (isJustEmptyPromise && iteration <= 2) {
-              messages.push({ role: "assistant", content: turnContent });
-              messages.push({
+            if (isJustEmptyPromise && iteration <= 3) {
+              currentMessages.push({ role: "assistant", content: turnContent });
+              currentMessages.push({
                 role: "user",
                 content: "⚠️ UYARI: İşlemi yapacağını/başlatacağını belirttin ancak çalıştırmak için hiçbir ```tool_call aracı çağırmadın! Lütfen sözde bırakma, yapacağını söylediğin işlemi HEMEN ```tool_call formatında çağır!",
               });
@@ -496,11 +498,30 @@ export async function POST(req: NextRequest) {
               .replace(/```(?:tool_call|json:tool_call|tool)[\s\S]*?```/gi, "")
               .replace(/```tool_result[\s\S]*?```/gi, "")
               .trim();
+
+            // Kodlama/proje talebi için: dosyalar yazıldı mı ama hiç build/tsc doğrulaması yapılmadı mı?
+            // Eğer öyleyse, modeli doğrulama adımına zorla
+            if (
+              isCreationRequestGlobal &&
+              executedAnyTool &&
+              !buildVerified &&
+              iteration < MAX_TOOL_ITERATIONS - 1
+            ) {
+              // Model konuşmaya döktü ama hiç build çalıştırmadı — onu zorlayalım
+              currentMessages.push({ role: "assistant", content: turnContent });
+              currentMessages.push({
+                role: "user",
+                content: `[SİSTEM - KRİTİK ADIM HATIRLATICI]\n✅ Kodlar yazıldı. Ancak henüz derleme/syntax doğrulaması yapılmadı.\nŞimdi MUTLAKA şu komutu çalıştır:\n\`\`\`tool_call\n{"tool": "run_command", "parameters": {"command": "cd ${pluginContext.projectDir} && npm run build 2>&1 | tail -30"}}\n\`\`\`\nBuild başarılıysa kullanıcıya teslim raporu sun. Hata varsa düzelt.`,
+              });
+              continue;
+            }
+
             if (cleanUserText.length > 20) {
               finalAnswerProduced = true;
             }
             break;
           }
+
 
           executedAnyTool = true;
 
@@ -592,6 +613,12 @@ export async function POST(req: NextRequest) {
                 if (lines.length > 25) {
                   llmOutputSummary = `(Komut başarıyla bitti, toplam ${lines.length} satır. Son 25 satır):\n${lines.slice(-25).join("\n")}`;
                 }
+                // Build/tsc doğrulaması başarılıysa işaretle
+                const executedCmd = String(call.parameters.command || "");
+                const isBuildCmd = /\b(?:npm\s+run\s+build|next\s+build|tsc\s+--noEmit|npx\s+tsc)\b/.test(executedCmd);
+                if (isBuildCmd) {
+                  buildVerified = true;
+                }
               }
             } else if (llmOutputSummary.length > 3000) {
               llmOutputSummary = llmOutputSummary.slice(0, 3000) + "\n...(kısaltıldı)";
@@ -613,12 +640,20 @@ export async function POST(req: NextRequest) {
             role: "assistant",
             content: turnContent,
           });
-          const isCreationRequest = /yap|oluştur|yaz|geliştir|kur|kod|proje|uygulama|tasarla|sayfa/i.test(userPrompt);
+          const isCreationRequest = /yap|oluştur|yaz|geliştir|kur|kod|proje|uygulama|tasarla|sayfa|todo|app\b/i.test(userPrompt);
           const feedbackRule = isCreationRequest
-            ? `ÖNEMLİ KURALLAR:
-1. İLETİŞİM & ŞEFFAFLIK: Kullanıcıya hangi adımda olduğunu ve sıradaki eylemini 1-2 cümleyle açıkla (Örn: "Paketler kuruldu, şimdi Todo sayfasının kodlarını yazıyorum..."). Sakın sadece sessizce araç çağırma!
-2. KOD ÜRETİMİ: Eğer paket kurulumu bittiyse ve kodlar henüz yazılmadıysa, istenen uygulamanın çalışan kaynak kodlarını (dosya yolu etiketli eksiksiz kod blokları halinde: \`\`\`typescript\n// src/app/page.tsx\n...\`\`\`) MUTLAKA üret. İşi sadece npm install ile yarım bırakma.
-3. TÜM ADIMLAR BİTTİYSE: Başka araca gerek kalmadıysa ASLA yeni araç çağırma. Kullanıcıya 1) Yapılan işlemleri, 2) Dosya yollarını, 3) Terminal çalıştırma komutunu ('npm run dev') ve 4) Sonraki Adımları (Yeni bir özellik veya soru için hazır olduğunu) içeren Türkçe nihai teslim raporunu sun.`
+            ? `ÖNEMLİ KURALLAR (PROJE TAMAMLAMA AKIŞI):
+MEVCUT DURUM: Adım ${iteration} tamamlandı. Build doğrulandı: ${buildVerified ? "EVET ✅" : "HAYIR ❌"}
+
+ZORUNLU ADIM SIRASI (hangi adımda olduğunu kontrol et ve bir sonrakine geç):
+1. 📦 KURULUM: npm install / npx create-next-app (proje henüz yoksa)
+2. 💻 KOD YAZIMI: Tüm kaynak dosyalarını yazma (layout.tsx, page.tsx, globals.css, components vb.) — Çok sayıda dosya gerekiyorsa hepsini tek turda yaz!
+3. ✅ DERLEME VE DOĞRULAMA: \`npm run build\` VEYA \`npx tsc --noEmit\` ile hata yok mu kontrol et
+4. 🔧 HATA DÜZELTME: Build hatalıysa hatayı düzelt ve 3. adıma dön
+5. 📋 TESLİM RAPORU: Build başarılıysa kullanıcıya 4 bölümlü teslim raporu sun — BU ADIMA ULAŞMADAN KONUŞMAYI KAPATMA!
+
+${!buildVerified ? "⚠️ UYARI: Henüz build/tsc doğrulaması yapılmadı! Kodlar yazıldıysa şimdi build et. Kodlar henüz yazılmadıysa önce yaz, sonra build et." : "✅ Build başarılı! Şimdi kullanıcıya eksiksiz teslim raporunu sun (nasıl çalıştırılır, sonraki adımlar)."}
+Bir sonraki adım için HEMEN \`tool_call\` bloğuyla devam et. Yalnızca teslim raporu aşamasındaysan araç çağırma.`
             : `ÖNEMLİ KURAL: Yukarıdaki araç çıktılarını incele. Başka bir araca kesinlikle ihtiyaç yoksa veya yeterli bilgiye ulaştıysan ASLA yeni bir araç çağırma; kullanıcıya doğrudan net, detaylı ve Türkçe nihai yanıtını sun.`;
 
           currentMessages.push({

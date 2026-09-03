@@ -320,58 +320,67 @@ export default function MessageBubble({
           )}
 
           {/* Hızlı Eylem Çipleri: Projeyi Çalıştır, Doğrula, Dosyaları Listele & Akıllı Öneriler */}
-          {!isUser && !isStreaming && onAction && (
-            (editedFiles && editedFiles.length > 0) ||
-            content.includes("npm run dev") ||
-            content.includes("npm start") ||
-            content.includes("Nasıl Çalıştırılır") ||
-            isLatest
-          ) && (
-            <div className="mt-3 pt-2.5 border-t border-gray-800/80 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onAction("Projeyi çalıştır ve durumunu kontrol et")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-700/50 hover:border-cyan-500 text-cyan-200 text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer select-none"
-                title="Projeyi terminalde çalıştır"
-              >
-                <Play size={12} className="text-cyan-400 fill-cyan-400" />
-                <span>Projeyi Çalıştır</span>
-              </button>
+          {!isUser && !isStreaming && onAction && (() => {
+            const hasEditedFiles = editedFiles && editedFiles.length > 0;
+            const hasRunCmd = content.includes("npm run dev") || content.includes("npm start") || content.includes("yarn dev");
+            const hasDelivery = content.includes("Nasıl Çalıştırılır") || content.includes("Tamamlanan İşlemler") || content.includes("Sonraki Adımlar");
+            const hasTscCmd = content.includes("npx tsc") || content.includes("npm run build");
+            const showChips = hasEditedFiles || hasRunCmd || hasDelivery || hasTscCmd;
+            if (!showChips) return null;
+            const suggestions = extractNextStepSuggestions(content);
+            return (
+              <div className="mt-3 pt-2.5 border-t border-gray-800/80 flex flex-wrap items-center gap-2">
+                {(hasRunCmd || hasDelivery || hasEditedFiles) && (
+                  <button
+                    type="button"
+                    onClick={() => onAction("Projeyi çalıştır ve durumunu kontrol et")}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-700/50 hover:border-cyan-500 text-cyan-200 text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer select-none"
+                    title="Projeyi terminalde çalıştır"
+                  >
+                    <Play size={12} className="text-cyan-400 fill-cyan-400" />
+                    <span>Projeyi Çalıştır</span>
+                  </button>
+                )}
 
-              <button
-                type="button"
-                onClick={() => onAction("npx tsc --noEmit ile syntax ve TypeScript kontrolü yap")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 border border-purple-700/50 hover:border-purple-500 text-purple-200 text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer select-none"
-                title="TypeScript doğrulaması başlat"
-              >
-                <Terminal size={12} className="text-purple-400" />
-                <span>Doğrula (npx tsc)</span>
-              </button>
+                {(hasTscCmd || hasEditedFiles) && (
+                  <button
+                    type="button"
+                    onClick={() => onAction("npx tsc --noEmit ile syntax ve TypeScript kontrolü yap")}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 border border-purple-700/50 hover:border-purple-500 text-purple-200 text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer select-none"
+                    title="TypeScript doğrulaması başlat"
+                  >
+                    <Terminal size={12} className="text-purple-400" />
+                    <span>Doğrula (npx tsc)</span>
+                  </button>
+                )}
 
-              <button
-                type="button"
-                onClick={() => onAction("Oluşturulan dosyaları ve mimariyi özetle")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-900/80 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-gray-300 text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer select-none"
-                title="Dosyaları ve mimariyi listele"
-              >
-                <FileCode size={12} className="text-gray-400" />
-                <span>Dosyaları Listele</span>
-              </button>
+                {hasEditedFiles && (
+                  <button
+                    type="button"
+                    onClick={() => onAction("Oluşturulan dosyaları ve mimariyi özetle")}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-900/80 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-gray-300 text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer select-none"
+                    title="Dosyaları ve mimariyi listele"
+                  >
+                    <FileCode size={12} className="text-gray-400" />
+                    <span>Dosyaları Listele</span>
+                  </button>
+                )}
 
-              {/* Sonraki Adımlardan Otomatik Çıkarılan Akıllı Öneri Çipleri */}
-              {extractNextStepSuggestions(content).map((sug, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => onAction(sug)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-950/30 hover:bg-blue-900/50 border border-blue-800/40 hover:border-blue-700 text-blue-200 text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer select-none"
-                  title={sug}
-                >
-                  <span className="truncate max-w-[220px]">{sug}</span>
-                </button>
-              ))}
-            </div>
-          )}
+                {/* Sonraki Adımlardan Otomatik Çıkarılan Akıllı Öneri Çipleri */}
+                {suggestions.map((sug, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => onAction(sug)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-950/30 hover:bg-blue-900/50 border border-blue-800/40 hover:border-blue-700 text-blue-200 text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer select-none"
+                    title={sug}
+                  >
+                    <span className="truncate max-w-[220px]">{sug}</span>
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Butonlar: Kopyala, Yeniden Dene, Geri Al */}
