@@ -107,6 +107,13 @@ export async function POST(req: NextRequest) {
     session = await createSession(cleanTitle, slug, projectDirParam || undefined);
     activeSessionId = session.session_id;
     isNewlyCreated = true;
+  } else if (session && (session.title === "Yeni Oturum" || session.title.startsWith("yeni_proje"))) {
+    // Kullanıcı önceden açılmış boş "Yeni Oturum"a ilk mesajı yazdıysa hemen ilk cümleden anlamlı başlık ata
+    const quickTitle = userPrompt.slice(0, 35).replace(/[\r\n]+/g, " ").trim();
+    if (quickTitle && quickTitle.length > 2) {
+      session.title = quickTitle;
+      await updateSessionTitle(activeSessionId!, quickTitle);
+    }
   }
 
   const history: ChatMessage[] = session ? [...session.conversation_history] : [];
@@ -632,8 +639,8 @@ Doğrulama başarılıysa kullanıcıya teslim raporu sun. Hata varsa düzelt.`,
                   buildVerified = true;
                 }
               }
-            } else if (llmOutputSummary.length > 3000) {
-              llmOutputSummary = llmOutputSummary.slice(0, 3000) + "\n...(kısaltıldı)";
+            } else if (llmOutputSummary.length > 18000) {
+              llmOutputSummary = llmOutputSummary.slice(0, 18000) + "\n...(kısaltıldı — dosyanın geri kalanı için satır veya sembol filtrele)";
             }
 
             toolResults.push(

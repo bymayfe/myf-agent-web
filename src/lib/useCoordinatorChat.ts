@@ -255,6 +255,11 @@ export function useCoordinatorChat(
                 }
                 return next;
               });
+            } else if (frame.event === "notice") {
+              setMessages((prev) => [
+                ...prev,
+                { role: "assistant", content: frame.data as string },
+              ]);
             } else if (frame.event === "error") {
               setMessages((prev) => [
                 ...prev,

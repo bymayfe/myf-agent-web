@@ -66,6 +66,38 @@ Tarayıcınızda [http://localhost:3111](http://localhost:3111) adresini açın.
 
 ---
 
+---
+
+## 🚀 Çoklu Ajan Sıralı Pipeline & Python Entegrasyonu
+
+Web kokpiti, 5 aşamalı otonom yazılım geliştirme zincirini (**Architect → Developer → QA → Micro-Fix → Reviewer**) iki farklı mimariyle destekler:
+
+### 1. Python Çoklu-Ajan Motoru (Önerilen - Tam Otonom Mod)
+Gerçek zamanlı test çalıştırıcı (`test_runner.py`), otomatik onarım döngüsü (`fix_engine.py`) ve AST bilgi grafiğini içeren tam teşekküllü Python motoruna bağlanır.
+
+* **Python Deposu:** [https://github.com/bymayfe/myf-agent-cli](https://github.com/bymayfe/myf-agent-cli)
+* **Kurulum & Yan Yana Klasör Mimarisi:**
+  Web projesinin bulunduğu üst klasöre geçip `myf-agent-cli` deposunu yan yana klonlayın:
+  ```bash
+  cd ..
+  git clone https://github.com/bymayfe/myf-agent-cli.git
+  cd myf-agent-cli
+  pip install -r agent_system/requirements.txt
+  ```
+* **Örnek Dizin Ağacı:**
+  ```text
+  Projects/
+  ├── myf-agent-web/       (Mevcut Web Arayüzü)
+  └── myf-agent-cli/       (Python Motoru)
+      └── agent_system/
+          └── pipeline_bridge.py
+  ```
+
+### 2. Dahili TypeScript Pipeline Motoru (Yedek Mod)
+Eğer Python motoru o an sistemde bulunamazsa web kokpiti hata verip durmaz; Next.js içerisinde yerleşik TypeScript pipeline motoru devreye girer ve aşamaları arayüzde canlı SSE akışıyla yürütür.
+
+---
+
 ## 🔌 RESTful API Mimarisi
 
 Tüm API uç noktaları tam RESTful prensiplere ve `Cache-Control: no-store, no-cache, must-revalidate` önbellek korumasına sahiptir:
@@ -73,6 +105,8 @@ Tüm API uç noktaları tam RESTful prensiplere ve `Cache-Control: no-store, no-
 | Metot | Uç Nokta | Durum Kodu | Açıklama |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/chat` | `200 Stream` | SSE tabanlı çift kanallı ajan sohbet ve araç yürütme |
+| `GET` | `/api/pipeline` | `200 OK` | Python köprüsü ve pipeline motor durumunu denetler |
+| `POST` | `/api/pipeline` | `200 Stream` | 5 aşamalı otonom ajan pipeline'ını canlı SSE ile yürütür |
 | `GET` | `/api/sessions` | `200 OK` | Kayıtlı tüm oturumların meta verilerini listeler |
 | `POST` | `/api/sessions` | `201 Created` | Yeni bir oturum başlatır (opsiyonel `project_dir` ile) |
 | `GET` | `/api/sessions/:id` | `200 OK` | Belirli bir oturumun tam mesaj geçmişini çeker |
