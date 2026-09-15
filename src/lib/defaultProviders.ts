@@ -188,6 +188,8 @@ export const DEFAULT_SETTINGS_JSON = {
   theme: "cyan",
   temperature: 0.2,
   max_tokens: 8192,
+  top_p: 0.95,
+  top_k: 40,
   planning_model: "ollama/qwen3.8:latest",
   code_model: "ollama/qwen3.8:latest",
   micro_fix_model: "ollama/qwen3.8:latest",

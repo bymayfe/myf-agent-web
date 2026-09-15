@@ -324,6 +324,43 @@ export default function SettingsModal({ open, onClose, settings, providers, onSa
                   </p>
                 </div>
               </Field>
+              <Field label={`Top-P Çekirdek Örnekleme (${draft.top_p ?? 0.95})`}>
+                <div className="space-y-1.5">
+                  <input
+                    type="range"
+                    min={0.1}
+                    max={1.0}
+                    step={0.05}
+                    value={draft.top_p ?? 0.95}
+                    onChange={(e) => setDraft((d) => ({ ...d, top_p: parseFloat(e.target.value) }))}
+                    className="w-full accent-cyan-500"
+                  />
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-gray-500">0.1 (Dar Olasılık)</span>
+                    <span className={`font-medium ${
+                      (draft.top_p ?? 0.95) >= 0.9 ? "text-cyan-400" : "text-emerald-400"
+                    }`}>
+                      {(draft.top_p ?? 0.95) === 0.95 ? "🎯 0.95 Kodlama & Mantık için İdeal" : "Dengeli Havuz"}
+                    </span>
+                    <span className="text-gray-500">1.0 (Tüm Havuz)</span>
+                  </div>
+                </div>
+              </Field>
+              <Field label={`Top-K Örnekleme Havuzu (${draft.top_k ?? 40})`}>
+                <div className="space-y-1">
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={draft.top_k ?? 40}
+                    onChange={(e) => setDraft((d) => ({ ...d, top_k: parseInt(e.target.value) || 40 }))}
+                    className="input-base"
+                  />
+                  <p className="text-[11px] text-gray-500">
+                    Her adımda değerlendirilecek en olası token sayısı. Kodlama için 40 önerilir (Aralık: 1 - 200).
+                  </p>
+                </div>
+              </Field>
             </>
           )}
 

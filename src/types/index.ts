@@ -25,6 +25,8 @@ export interface Settings {
   theme: string;
   temperature: number;
   max_tokens: number;
+  top_p?: number;
+  top_k?: number;
   planning_model: string;
   code_model: string;
   micro_fix_model: string;

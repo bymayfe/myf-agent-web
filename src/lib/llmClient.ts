@@ -32,6 +32,8 @@ export interface CallLlmOptions {
   apiKey?: string;
   temperature?: number;
   maxTokens?: number;
+  topP?: number;
+  topK?: number;
   thinkMode?: boolean;
   warmup?: boolean;
   onToken?: OnToken;
@@ -228,10 +230,11 @@ async function callOllamaChat(opts: CallLlmOptions): Promise<string> {
       keep_alive: keepAlive,
       options: {
         temperature: opts.temperature ?? 0.2,
+        top_p: opts.topP ?? 0.95,
+        top_k: opts.topK ?? 40,
         num_predict: numPredict,
         num_ctx: numCtx,
         repeat_penalty: 1.15,
-        top_p: 0.9,
       },
     }),
   }).catch((err) => {
@@ -334,6 +337,8 @@ async function callOpenAiCompatChat(opts: CallLlmOptions): Promise<string> {
       messages: opts.messages.map((m) => ({ role: m.role, content: m.content })),
       temperature: opts.temperature ?? 0.2,
       max_tokens: opts.maxTokens ?? 8192,
+      top_p: opts.topP ?? 0.95,
+      ...(opts.topK !== undefined ? { top_k: opts.topK } : { top_k: 40 }),
       frequency_penalty: 0.15,
       presence_penalty: 0.1,
       repeat_penalty: 1.15,
