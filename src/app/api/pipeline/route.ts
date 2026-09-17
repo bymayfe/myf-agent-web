@@ -3,7 +3,7 @@
 // Python agent_system motoruyla (main.py / subagent_engine.py) doğrudan entegre çalışır.
 
 import { NextRequest } from "next/server";
-import { getSettings, getProviders, getProviderApiKey, loadSession } from "@/lib/store";
+import { getSettings, getProviders, getProviderApiKey, loadSession, saveSessionHistory } from "@/lib/store";
 import { executePipeline, PipelineStepEvent } from "@/lib/pipeline/pipelineRunner";
 import { spawn } from "child_process";
 import readline from "readline";
@@ -74,8 +74,37 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
-  const requirement: string = (body.requirement ?? "").trim();
+  let requirement: string = (body.requirement ?? "").trim();
   const sessionId: string | undefined = body.sessionId;
+
+  const isGeneric = (t?: string) => {
+    if (!t) return true;
+    const s = t.trim().toLowerCase();
+    return (
+      s.startsWith("/") ||
+      s === "devam" ||
+      s === "devam et" ||
+      s === "continue" ||
+      s === "başlat" ||
+      s === "start" ||
+      s === "run" ||
+      s === "true" ||
+      s.includes("sonraki adımları tamamla") ||
+      s.includes("kaldığın yerden devam et")
+    );
+  };
+
+  if (sessionId && (!requirement || isGeneric(requirement))) {
+    try {
+      const currentSession = await loadSession(sessionId);
+      const meaningful = [...(currentSession?.conversation_history || [])].reverse().find(
+        (m) => m.role === "user" && !isGeneric(m.content)
+      );
+      if (meaningful?.content) {
+        requirement = meaningful.content;
+      }
+    } catch {}
+  }
 
   if (!requirement) {
     return new Response(JSON.stringify({ error: "Gereksinim belirtilmedi." }), { status: 400 });
@@ -145,22 +174,62 @@ export async function POST(req: NextRequest) {
             },
           });
 
-          // İstemci bağlantıyı keserse alt süreci durdur
-          req.signal.addEventListener("abort", () => {
+          const recordedFiles: string[] = [];
+          let pipelineStageNotes = `🚀 **Sıralı Pipeline Başlatıldı**\n\n🎯 **Gereksinim:** *${requirement}*\n`;
+
+          const saveIncrementalProgress = async () => {
+            if (!sessionId) return;
             try {
-              child.kill();
+              const currentSession = await loadSession(sessionId);
+              if (currentSession) {
+                const history = [...(currentSession.conversation_history || [])];
+                const filesBlock =
+                  recordedFiles.length > 0
+                    ? `\n\n📁 **Oluşturulan Dosyalar (${recordedFiles.length}):**\n` +
+                      recordedFiles.map((f) => `- \`${f}\``).join("\n")
+                    : "";
+                const fullContent = (pipelineStageNotes + filesBlock).trim();
+
+                const last = history[history.length - 1];
+                if (last && last.role === "assistant" && last.content.includes("Sıralı Pipeline")) {
+                  last.content = fullContent;
+                } else {
+                  history.push({
+                    role: "assistant",
+                    content: fullContent,
+                    createdAt: new Date().toISOString(),
+                  });
+                }
+                await saveSessionHistory(sessionId, history);
+              }
             } catch {}
-          });
+          };
 
           const rl = readline.createInterface({ input: child.stdout });
 
-          rl.on("line", (line) => {
+          rl.on("line", async (line) => {
             const clean = line.trim();
             if (!clean) return;
 
             try {
               const parsed = JSON.parse(clean);
               if (parsed.event && parsed.data !== undefined) {
+                const data = parsed.data;
+                if (parsed.event === "pipeline_event") {
+                  if (data?.status === "file_written" && data?.file) {
+                    recordedFiles.push(data.file);
+                    await saveIncrementalProgress();
+                  } else if (data?.status === "start") {
+                    pipelineStageNotes += `\n\n### ${data.stageIcon} Aşama ${data.stage}: ${data.stageName}\n*${data.message}*`;
+                    await saveIncrementalProgress();
+                  } else if (data?.status === "done") {
+                    pipelineStageNotes += `\n\n> ✅ **${data.stageName} aşaması tamamlandı.**`;
+                    await saveIncrementalProgress();
+                  } else if (data?.status === "error") {
+                    pipelineStageNotes += `\n\n> ⚠️ **Hata:** ${data.message}`;
+                    await saveIncrementalProgress();
+                  }
+                }
                 enqueue(sseLine(parsed.event, parsed.data));
                 return;
               }
@@ -183,26 +252,70 @@ export async function POST(req: NextRequest) {
 
           child.stderr.on("data", (data) => {
             const msg = data.toString();
-            // pydantic ve litellm uyarılarını atla
             if (!msg.includes("UserWarning") && !msg.includes("DeprecationWarning")) {
               console.warn("[Python Pipeline Stderr]:", msg);
             }
           });
 
-          child.on("close", (code) => {
-            if (code === 0) {
-              enqueue(sseLine("status", "✅ Pipeline tüm aşamalarıyla başarıyla tamamlandı!"));
-            } else {
-              enqueue(sseLine("status", `⚠️ Pipeline çıkış kodu ${code} ile tamamlandı.`));
-            }
-            enqueue(sseLine("done", ""));
-            closeStream();
-          });
+          const heartbeatTimer = setInterval(() => {
+            enqueue(": heartbeat\n\n");
+          }, 8000);
 
-          child.on("error", (err) => {
-            enqueue(sseLine("error", `Python çalıştırma hatası: ${err.message}`));
-            enqueue(sseLine("done", ""));
-            closeStream();
+          await new Promise<void>((resolve) => {
+            child.on("close", async (code) => {
+              clearInterval(heartbeatTimer);
+              try {
+                if (code === 0) {
+                  enqueue(sseLine("status", "✅ Pipeline tüm aşamalarıyla başarıyla tamamlandı!"));
+                } else {
+                  enqueue(sseLine("status", `⚠️ Pipeline çıkış kodu ${code} ile tamamlandı.`));
+                }
+
+                if (sessionId) {
+                  try {
+                    const currentSession = await loadSession(sessionId);
+                    if (currentSession) {
+                      const history = [...(currentSession.conversation_history || [])];
+                      const summaryMsg =
+                        code === 0
+                          ? `🚀 **Sıralı Pipeline Başarıyla Tamamlandı!**\n\n🎯 **Gereksinim:** *${requirement}*\n\n📁 **Oluşturulan Dosyalar (${recordedFiles.length}):**\n` +
+                            (recordedFiles.length > 0
+                              ? recordedFiles.map((f) => `- \`${f}\``).join("\n")
+                              : "- (Dosyalar proje dizinine kaydedildi)")
+                          : `⚠️ **Pipeline Tamamlandı (Çıkış Kodu: ${code})**\n\n${pipelineStageNotes}`;
+
+                      const last = history[history.length - 1];
+                      if (last && last.role === "assistant" && last.content.includes("Sıralı Pipeline")) {
+                        last.content = summaryMsg;
+                      } else {
+                        history.push({
+                          role: "assistant",
+                          content: summaryMsg,
+                          createdAt: new Date().toISOString(),
+                        });
+                      }
+                      await saveSessionHistory(sessionId, history);
+                    }
+                  } catch {}
+                }
+
+                enqueue(sseLine("done", ""));
+              } finally {
+                closeStream();
+                resolve();
+              }
+            });
+
+            child.on("error", (err) => {
+              clearInterval(heartbeatTimer);
+              try {
+                enqueue(sseLine("error", `Python çalıştırma hatası: ${err.message}`));
+                enqueue(sseLine("done", ""));
+              } finally {
+                closeStream();
+                resolve();
+              }
+            });
           });
 
           return;

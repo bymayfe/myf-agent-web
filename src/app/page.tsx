@@ -6,7 +6,6 @@ import Sidebar from "@/components/Sidebar";
 import ChatPanel from "@/components/ChatPanel";
 import TerminalPanel from "@/components/TerminalPanel";
 import SettingsModal from "@/components/SettingsModal";
-import LogViewerModal from "@/components/LogViewerModal";
 import { useCoordinatorChat } from "@/lib/useCoordinatorChat";
 import type { ProvidersFile, SessionMeta, Settings } from "@/types";
 import { Loader2, AlertTriangle } from "lucide-react";
@@ -73,24 +72,12 @@ function DeleteSessionDialog({
   );
 }
 
-function isExplicitProject(dir?: string | null): boolean {
-  if (!dir) return false;
-  const trimmed = dir.trim();
-  if (!trimmed) return false;
-  if (trimmed.includes("agent_system/projects") || trimmed.includes("data/projects")) return false;
-  if (/[\\/]projects[\\/]\d{8}_\d{6}_/.test(trimmed)) return false;
-  return true;
-}
-
 export default function Home() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [providers, setProviders] = useState<ProvidersFile | null>(null);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [activeProjectDir, setActiveProjectDir] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [logViewerOpen, setLogViewerOpen] = useState(false);
-  const [unresolvedErrorCount, setUnresolvedErrorCount] = useState(0);
   const [sessionToDelete, setSessionToDelete] = useState<{
     id: string;
     title: string;
@@ -116,7 +103,6 @@ export default function Home() {
     pipelineEvents,
     continuePrompt,
     permissionRequest,
-    contextStatus,
     activityGroups,
     terminalTasks,
     activeTerminalTaskId,
@@ -125,14 +111,11 @@ export default function Home() {
     setActiveTerminalTaskId,
     sendMessage,
     handleContinue,
-    dismissContinuePrompt,
     respondPermission,
     retry,
     undo,
     stop,
     loadHistory,
-    deleteSessionState,
-    killTerminalTask,
   } = useCoordinatorChat(activeSessionId, {
     onTitleUpdate: refreshSessions,
     onSessionCreated: (newId) => {
@@ -155,7 +138,6 @@ export default function Home() {
         if (!res.ok) return;
         const data = await res.json().catch(() => ({}));
         if (data.session) {
-          setActiveProjectDir(isExplicitProject(data.session.project_dir) ? data.session.project_dir : null);
           const raw = data.session.conversation_history ?? [];
           const history = raw
             .filter((m: { role: string; content?: string }) => m.role !== "system" && m.content)
@@ -194,29 +176,35 @@ export default function Home() {
     }
   }, [refreshSessions, handleSelectSession]);
 
-  const currentSession = sessions.find((s) => s.session_id === activeSessionId);
-  const currentProjectDir = currentSession?.project_dir || activeProjectDir;
-
-  // Aktif projedeki çözülmemiş hata sayısını SQLite'tan periyodik kontrol et
-  useEffect(() => {
-    if (!currentProjectDir) {
-      setUnresolvedErrorCount(0);
-      return;
-    }
-    fetch(`/api/logs?action=summary&projectDir=${encodeURIComponent(currentProjectDir)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.recentErrors) {
-          const count = d.recentErrors.filter((e: { resolved?: number }) => !e.resolved).length;
-          setUnresolvedErrorCount(count);
-        }
-      })
-      .catch(() => {});
-  }, [currentProjectDir, activeSessionId]);
-
   const handleNewSession = async (projectDir?: string) => {
+    try {
+      const slug = projectDir ? projectDir.split("/").filter(Boolean).pop() || "proje" : "genel";
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "Yeni Oturum",
+          slug,
+          project_dir: projectDir || "",
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.session?.session_id) {
+          const newId = data.session.session_id;
+          setActiveSessionId(newId);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("myf_active_session", newId);
+          }
+          loadHistory([], newId);
+          await refreshSessions();
+          return;
+        }
+      }
+    } catch {
+      // Hata durumunda taslak ekranına geç
+    }
     setActiveSessionId(null);
-    setActiveProjectDir(projectDir || null);
     if (typeof window !== "undefined") {
       localStorage.removeItem("myf_active_session");
     }
@@ -236,8 +224,6 @@ export default function Home() {
   const handleConfirmDeleteSession = async () => {
     if (!sessionToDelete) return;
     const { id, isRunning } = sessionToDelete;
-    const s = sessions.find((item) => item.session_id === id);
-    const targetProjectDir = isExplicitProject(s?.project_dir) ? s!.project_dir : null;
 
     // 1. Eğer aktif işlem yürütülüyorsa veya silinen oturum aktifse, işlemi hemen durdur
     if (isRunning || activeSessionId === id) {
@@ -251,18 +237,12 @@ export default function Home() {
       // ignore
     }
 
-    // 3. Hafızadan ve ekrandan ANINDA temizle
-    deleteSessionState(id);
-
-    // 4. Eğer silinen oturum ekranda açıksa ekranı tamamen temizle ve yeni konuşma moduna geç
+    // 3. Eğer silinen oturum ekranda açıksa ekranı tamamen temizle
     if (activeSessionId === id) {
       setActiveSessionId(null);
       if (typeof window !== "undefined") {
         localStorage.removeItem("myf_active_session");
       }
-      // Eğer projedeki konuşmayı sildiysem proje içinde konuşma,
-      // Eğer proje dışında ise normal conversation olarak açılacak
-      setActiveProjectDir(targetProjectDir);
       loadHistory([], null);
     }
 
@@ -307,9 +287,9 @@ export default function Home() {
         }
       : null;
 
-  const isExplicitCurrent = isExplicitProject(currentProjectDir);
-  const currentProjectName = isExplicitCurrent
-    ? (currentProjectDir || "").trim().split("/").filter(Boolean).pop() || null
+  const currentSession = sessions.find((s) => s.session_id === activeSessionId);
+  const currentProjectName = currentSession?.project_dir
+    ? currentSession.project_dir.split("/").filter(Boolean).pop()
     : null;
 
   return (
@@ -323,9 +303,6 @@ export default function Home() {
         onToggleTerminal={() => setIsTerminalOpen((v) => !v)}
         isTerminalOpen={isTerminalOpen}
         taskCount={terminalTasks.length}
-        onOpenLogs={() => setLogViewerOpen(true)}
-        unresolvedErrorCount={unresolvedErrorCount}
-        contextUsage={contextStatus}
       />
 
       <div className="flex-1 flex min-h-0 relative">
@@ -359,15 +336,15 @@ export default function Home() {
           permissionRequest={permissionRequest}
           continuePrompt={continuePrompt}
           activeTask={activeTask}
-          onSend={(text) => sendMessage(text, undefined, activeProjectDir || undefined)}
+          onSend={sendMessage}
           onStop={stop}
           onContinue={handleContinue}
-          onDismissContinue={dismissContinuePrompt}
           onRetry={retry}
           onUndo={undo}
           onRespondPermission={respondPermission}
           onOpenTerminal={() => setIsTerminalOpen(true)}
-          projectName={currentProjectName}
+          onNewSession={() => handleNewSession()}
+          onClearMessages={() => loadHistory([], activeSessionId)}
         />
         {isTerminalOpen && (
           <TerminalPanel
@@ -375,7 +352,6 @@ export default function Home() {
             activeTaskId={activeTerminalTaskId}
             onSelectTask={(id) => setActiveTerminalTaskId(id)}
             onClose={() => setIsTerminalOpen(false)}
-            onKillTask={killTerminalTask}
           />
         )}
       </div>
@@ -409,13 +385,6 @@ export default function Home() {
         settings={settings}
         providers={providers}
         onSave={handleSaveSettings}
-      />
-
-      <LogViewerModal
-        isOpen={logViewerOpen}
-        onClose={() => setLogViewerOpen(false)}
-        projectDir={currentSession?.project_dir}
-        projectName={currentProjectName}
       />
       {!activeProvider && null}
     </>

@@ -151,13 +151,13 @@ class PluginManager {
       for (const tool of plugin.tools) {
         const paramKeys = Object.keys(tool.parameters);
         const paramsDesc = paramKeys.length > 0
-          ? paramKeys.map((k) => `"${k}": <${tool.parameters[k].type}${tool.parameters[k].required ? ", zorunlu" : ""}> (${tool.parameters[k].description})`).join(", ")
-          : "";
-        lines.push(`  - Araç: \`${tool.name}\` — ${tool.description}\n    Örnek Parametreler: { ${paramsDesc || "(parametre yok)"} }`);
+          ? paramKeys.map((k) => `    * ${k} (${tool.parameters[k].type}${tool.parameters[k].required ? ", zorunlu" : ""}): ${tool.parameters[k].description}`).join("\n")
+          : "    (Parametre gerekmez)";
+        lines.push(`  - Araç: \`${tool.name}\` — ${tool.description}\n    Parametreler:\n${paramsDesc}`);
       }
     }
 
-    lines.push("\nBir araç çalıştırdığında sonucu sistem sana iletecek. Sonuçları inceledikten sonra gerekiyorsa sıradaki adımı çalıştır veya kullanıcıya doğrudan nihai Türkçe yanıtını ver.");
+    lines.push("\nBir araç çalıştırdığında sonucu sistem sana iletecek, ardından nihai cevabını verebilirsin.");
     return lines.join("\n");
   }
 
@@ -211,71 +211,17 @@ class PluginManager {
     }
   }
 
-  /** Yanıttaki ```tool_call ... ``` veya ```json ... ``` veya çıplak JSON araç çağrı bloklarını ayrıştırır */
+  /** Yanıttaki ```tool_call ... ``` veya ```json ... ``` veya _call {...} araç çağrı bloklarını ayrıştırır */
   extractToolCalls(text: string): Array<{ tool: string; parameters: Record<string, unknown> }> {
-    if (!text) return [];
     const calls: Array<{ tool: string; parameters: Record<string, unknown> }> = [];
-    const seen = new Set<string>();
+    const seenTools = new Set<string>();
 
-    const repairAndParseJson = (raw: string): any => {
-      const trimmed = raw.trim();
+    const parseAndAdd = (rawJson: string, langTag = "") => {
       try {
-        return JSON.parse(trimmed);
-      } catch {
-        // 1. Düzeltme: Sondaki \"} veya \" } kaçış hatasını gider (Model string'i bitirirken backslash koyabilir)
-        let s = trimmed.replace(/\\"\}\s*$/, "\"}").replace(/\\"\s*\}\s*$/, "\"}");
-        s = s.replace(/,\s*([\}\]])/g, "$1");
-        if (s.startsWith("{") && !s.endsWith("}")) {
-          s = s + "}";
-        }
-        try {
-          return JSON.parse(s);
-        } catch {}
-
-        // 2. Regex ile esnek kurtarma (özellikle write_file, run_command, web_search için)
-        const toolMatch = /"(?:tool|function|name)"\s*:\s*"([^"]+)"/.exec(trimmed);
-        if (toolMatch) {
-          const toolName = toolMatch[1];
-          const params: Record<string, unknown> = {};
-
-          const pathMatch = /"(?:path|filePath)"\s*:\s*"([^"]+)"/.exec(trimmed);
-          if (pathMatch) params.path = pathMatch[1];
-
-          const cmdMatch = /"command"\s*:\s*"([^"]+)"/.exec(trimmed);
-          if (cmdMatch) params.command = cmdMatch[1];
-
-          const queryMatch = /"query"\s*:\s*"([^"]+)"/.exec(trimmed);
-          if (queryMatch) params.query = queryMatch[1];
-
-          const contentIdx = trimmed.indexOf('"content":');
-          if (contentIdx !== -1) {
-            let contentRaw = trimmed.slice(contentIdx + 10).trim();
-            if (contentRaw.startsWith('"')) contentRaw = contentRaw.slice(1);
-            contentRaw = contentRaw
-              .replace(/\\"\s*\}\s*$/, "")
-              .replace(/"\s*\}\s*$/, "")
-              .replace(/\}\s*$/, "");
-            try {
-              contentRaw = JSON.parse(`"${contentRaw.replace(/"/g, '\\"')}"`);
-            } catch {
-              contentRaw = contentRaw
-                .replace(/\\n/g, "\n")
-                .replace(/\\t/g, "\t")
-                .replace(/\\"/g, '"')
-                .replace(/\\\\/g, "\\");
-            }
-            params.content = contentRaw;
-          }
-
-          return { tool: toolName, parameters: params };
-        }
-      }
-      throw new Error("JSON parse hatası");
-    };
-
-    const tryAddCall = (rawJson: string, langTag: string = "") => {
-      try {
-        const parsed = repairAndParseJson(rawJson);
+        let cleaned = rawJson.trim();
+        if (cleaned.endsWith(")")) cleaned = cleaned.slice(0, -1).trim();
+        if (cleaned.endsWith(";")) cleaned = cleaned.slice(0, -1).trim();
+        const parsed = JSON.parse(cleaned);
         const hasExplicitToolField = typeof parsed.tool === "string" && Boolean(parsed.tool);
         const isTaggedAsTool = langTag.startsWith("tool") || langTag === "json:tool_call";
 
@@ -289,8 +235,8 @@ class PluginManager {
         if (toolName && typeof toolName === "string") {
           const params = (parsed.parameters || parsed.arguments || parsed.args || parsed.params || {}) as Record<string, unknown>;
           const key = `${toolName}:${JSON.stringify(params)}`;
-          if (!seen.has(key)) {
-            seen.add(key);
+          if (!seenTools.has(key)) {
+            seenTools.add(key);
             calls.push({
               tool: toolName,
               parameters: typeof params === "object" && params !== null ? params : {},
@@ -302,92 +248,63 @@ class PluginManager {
       }
     };
 
-    // 1. Standart kod bloğu eşleştirmesi
-    const regex = /```(tool_call|json:tool_call|tool|tools|json)?\n?(\{[\s\S]*?\})\n?```/g;
-    let match: RegExpExecArray | null;
+    // Dengeli parantez (balanced braces) ile iç içe JSON objelerini eksiksiz çıkar
+    const extractBalancedJsonObjects = (src: string): string[] => {
+      const results: string[] = [];
+      let depth = 0;
+      let startIdx = -1;
+      let inString = false;
+      let escape = false;
 
-    while ((match = regex.exec(text)) !== null) {
-      tryAddCall(match[2].trim(), (match[1] || "").toLowerCase());
-    }
-
-    // 1b. Eğer kapanmamış ```tool_call bloğu varsa yakala
-    if (calls.length === 0) {
-      const unclosedMatch = /```(tool_call|json:tool_call|tool|tools|json)?\n?(\{[\s\S]*)$/.exec(text);
-      if (unclosedMatch) {
-        tryAddCall(unclosedMatch[2].trim(), (unclosedMatch[1] || "").toLowerCase());
-      }
-    }
-
-    // 2. Eğer kod bloğu bulunamadıysa, çıplak {"tool": ...} bloklarını dengeli parantez ile bul
-    if (calls.length === 0) {
-      let searchIdx = 0;
-      while (searchIdx < text.length) {
-        const toolMatch = text.slice(searchIdx).match(/\{[\s\r\n]*"(?:tool|function)"/);
-        if (!toolMatch || toolMatch.index === undefined) break;
-        const start = searchIdx + toolMatch.index;
-        let braceCount = 0;
-        let end = -1;
-        let inString = false;
-        let escape = false;
-
-        for (let i = start; i < text.length; i++) {
-          const char = text[i];
-          if (escape) {
-            escape = false;
-            continue;
-          }
-          if (char === "\\") {
-            escape = true;
-            continue;
-          }
-          if (char === '"') {
-            inString = !inString;
-            continue;
-          }
-          if (!inString) {
-            if (char === "{") braceCount++;
-            else if (char === "}") {
-              braceCount--;
-              if (braceCount === 0) {
-                end = i;
-                break;
-              }
+      for (let i = 0; i < src.length; i++) {
+        const ch = src[i];
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (ch === "\\") {
+          escape = true;
+          continue;
+        }
+        if (ch === '"') {
+          inString = !inString;
+          continue;
+        }
+        if (!inString) {
+          if (ch === "{") {
+            if (depth === 0) startIdx = i;
+            depth++;
+          } else if (ch === "}") {
+            depth--;
+            if (depth === 0 && startIdx !== -1) {
+              results.push(src.slice(startIdx, i + 1));
+              startIdx = -1;
+            } else if (depth < 0) {
+              depth = 0;
+              startIdx = -1;
             }
           }
         }
+      }
+      return results;
+    };
 
-        if (end !== -1) {
-          tryAddCall(text.slice(start, end + 1).trim());
-          searchIdx = end + 1;
-        } else {
-          searchIdx = start + 8;
-        }
+    // 1. Markdown kod blokları içindeki JSON'ları çıkar
+    const blockRegex = /```(?:tool_call|json:tool_call|tool|tools|json)?\n?([\s\S]*?)(?:```|$)/g;
+    let match: RegExpExecArray | null;
+    while ((match = blockRegex.exec(text)) !== null) {
+      const blockContent = match[1];
+      const jsons = extractBalancedJsonObjects(blockContent);
+      for (const j of jsons) {
+        parseAndAdd(j, "tool_call");
       }
     }
 
-    // 3. Akıllı Niyet Kurtarma (Heuristic Command Intent Recovery):
-    // Model "şimdi `npx tsc --noEmit` çalıştırıyorum" veya "npx tsc --noEmit ile syntax kontrolünü yapıyorum"
-    // deyip ```tool_call bloğunu unuttuysa, komutu yakala ve run_command aracına dönüştür
-    if (calls.length === 0) {
-      const inlineCmdPatterns = [
-        /(?:çalıştırıyorum|yapıyorum|başlatıyorum|kontrol\s*ediyorum|deniyorum)[^`\n]*`([a-zA-Z0-9_\-\.\/: ]+)`/i,
-        /`([a-zA-Z0-9_\-\.\/: ]+)`[^`\n]*(?:çalıştırıyorum|yapıyorum|başlatıyorum|kontrol\s*ediyorum|ile\s*kontrol|ile\s*syntax|doğruluyorum)/i,
-        /(?:başlatıyorum|yapıyorum|çalıştırıyorum|kontrol\s*ediyorum):\s*`([a-zA-Z0-9_\-\.\/: ]+)`/i,
-        /```(?:bash|sh|shell|zsh)\n([^\n]+)\n```/i,
-      ];
-      for (const pat of inlineCmdPatterns) {
-        const m = pat.exec(text);
-        if (m && m[1]) {
-          const candidateCmd = m[1].trim();
-          const SHELL_PREFIXES = /^(?:npm|npx|pnpm|yarn|git|python|pytest|tsc|cargo|go|node|ls|cat|rm|mkdir|curl|chmod|find|touch|cd|docker)\b/i;
-          if (SHELL_PREFIXES.test(candidateCmd) || candidateCmd.split(" ").length >= 2) {
-            calls.push({
-              tool: "run_command",
-              parameters: { command: candidateCmd },
-            });
-            break;
-          }
-        }
+    // 2. Blok dışındaki ham `tool_call\n{...}` veya düz JSON objelerini de dengeli şekilde yakala
+    const allJsons = extractBalancedJsonObjects(text);
+    for (const j of allJsons) {
+      if (j.includes('"tool"') || j.includes('"parameters"')) {
+        parseAndAdd(j, "tool_call");
       }
     }
 

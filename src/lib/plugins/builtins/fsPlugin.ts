@@ -26,26 +26,24 @@ Projedeki dosyaları okumak için 'read_file', yeni dosya kaydetmek/düzenlemek 
       displayName: "Dosya Oku",
       description: "Belirtilen dosyanın içeriğini okur.",
       parameters: {
-        path: {
+        filePath: {
           type: "string",
-          description: "Okunacak dosyanın proje dizinine göre göreceli veya mutlak yolu (path veya filePath)",
+          description: "Okunacak dosyanın proje dizinine göre göreceli veya mutlak yolu",
           required: true,
         },
       },
       execute: async (params, context) => {
-        const rawPath = String(
-          params.path || params.filePath || params.file || params.target || ""
-        ).trim();
-        if (!rawPath) return { success: false, output: "Dosya yolu belirtilmeli (path veya filePath)." };
+        const rawPath = String(params.filePath || params.path || params.file || "").trim();
+        if (!rawPath) return { success: false, output: "Dosya yolu belirtilmeli." };
 
         const target = path.isAbsolute(rawPath) ? rawPath : path.join(context.projectDir, rawPath);
         try {
           const content = await fs.readFile(target, "utf-8");
           const lines = content.split("\n");
-          if (lines.length > 500) {
+          if (lines.length > 800) {
             return {
               success: true,
-              output: `📄 Dosya: ${rawPath} (${lines.length} satır - ilk 500 satır gösteriliyor):\n\n` + lines.slice(0, 500).join("\n"),
+              output: `📄 Dosya: ${rawPath} (${lines.length} satır - ilk 800 satır gösteriliyor):\n\n` + lines.slice(0, 800).join("\n"),
             };
           }
           return {
@@ -65,9 +63,9 @@ Projedeki dosyaları okumak için 'read_file', yeni dosya kaydetmek/düzenlemek 
       displayName: "Dosya Yaz / Güncelle",
       description: "Belirtilen dosyayı oluşturur veya günceller.",
       parameters: {
-        path: {
+        filePath: {
           type: "string",
-          description: "Yazılacak dosyanın yolu (path veya filePath)",
+          description: "Yazılacak dosyanın yolu",
           required: true,
         },
         content: {
@@ -77,11 +75,9 @@ Projedeki dosyaları okumak için 'read_file', yeni dosya kaydetmek/düzenlemek 
         },
       },
       execute: async (params, context) => {
-        const rawPath = String(
-          params.path || params.filePath || params.file || params.target || ""
-        ).trim();
+        const rawPath = String(params.filePath || params.path || params.file || "").trim();
         const content = String(params.content ?? "");
-        if (!rawPath) return { success: false, output: "Dosya yolu belirtilmeli (path veya filePath)." };
+        if (!rawPath) return { success: false, output: "Dosya yolu belirtilmeli." };
 
         const target = path.isAbsolute(rawPath) ? rawPath : path.join(context.projectDir, rawPath);
         try {
@@ -107,13 +103,11 @@ Projedeki dosyaları okumak için 'read_file', yeni dosya kaydetmek/düzenlemek 
       parameters: {
         dirPath: {
           type: "string",
-          description: "Listelenecek klasör yolu (varsayılan: proje kök dizini; dirPath veya path)",
+          description: "Listelenecek klasör yolu (varsayılan: proje kök dizini)",
         },
       },
       execute: async (params, context) => {
-        const rawPath = String(
-          params.dirPath || params.path || params.dir || params.directory || ""
-        ).trim();
+        const rawPath = String(params.dirPath || "").trim();
         const target = rawPath ? (path.isAbsolute(rawPath) ? rawPath : path.join(context.projectDir, rawPath)) : context.projectDir;
 
         try {

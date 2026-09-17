@@ -9,24 +9,6 @@ import path from "path";
 import type { Settings, ProvidersFile, SessionFile, SessionMeta, ProjectEntry } from "@/types";
 import { DEFAULT_PROVIDERS, DEFAULT_SETTINGS_JSON } from "./defaultProviders";
 
-export function getProjectsBaseDir(): string {
-  if (process.env.AGENT_PROJECTS_DIR) {
-    return path.resolve(process.env.AGENT_PROJECTS_DIR);
-  }
-  // 1. Monorepo kontrolü (CLI_Project/agent_system/projects)
-  const monorepo = path.resolve(process.cwd(), "..", "agent_system", "projects");
-  if (fsSync.existsSync(path.resolve(process.cwd(), "..", "agent_system"))) {
-    return monorepo;
-  }
-  // 2. Yan yana klonlanan repo kontrolü (../myf-agent-cli/agent_system/projects)
-  const siblingCli = path.resolve(process.cwd(), "..", "myf-agent-cli", "agent_system", "projects");
-  if (fsSync.existsSync(path.resolve(process.cwd(), "..", "myf-agent-cli", "agent_system"))) {
-    return siblingCli;
-  }
-  // 3. Standalone Next.js modu: Uygulama içindeki "projects" klasörü
-  return path.resolve(process.cwd(), "projects");
-}
-
 const DATA_DIR = path.join(process.cwd(), "data");
 const SESSIONS_DIR = path.join(DATA_DIR, "sessions");
 const SETTINGS_PATH = path.join(DATA_DIR, "settings.json");
@@ -84,17 +66,67 @@ export async function setActiveProvider(name: string): Promise<ProvidersFile> {
 
 export async function updateProviderModel(providerName: string, modelId: string): Promise<void> {
   const providers = await getProviders();
-  if (providers.providers[providerName]) {
-    providers.providers[providerName].agent_models = providers.providers[providerName].agent_models || {} as any;
-    providers.providers[providerName].agent_models.coordinator = modelId;
+  const prov = providers.providers[providerName];
+  if (prov) {
+    prov.agent_models = prov.agent_models || ({} as any);
+    prov.agent_models.coordinator = modelId;
+
+    // Model context window içine de ekle (hafızaya kaydet)
+    prov.model_context_windows = prov.model_context_windows || {};
+    const prefix = prov.model_prefix ? `${prov.model_prefix}/` : "";
+    const cleanKey = modelId.startsWith(prefix) ? modelId.slice(prefix.length) : modelId;
+    if (!prov.model_context_windows[cleanKey] && !prov.model_context_windows[modelId]) {
+      prov.model_context_windows[cleanKey] = prov.default_context_window || 131072;
+    }
+
     await writeJson(PROVIDERS_PATH, providers);
   }
 }
 
-/** İlgili sağlayıcının gerçek API anahtarını .env.local'den okur. Asla diske yazılmaz. */
+/** İlgili sağlayıcının gerçek API anahtarını .env.local'den okur. */
 export function getProviderApiKey(envVarName: string | null): string {
   if (!envVarName) return "";
-  return process.env[envVarName] ?? "";
+  if (process.env[envVarName]) return process.env[envVarName]!;
+
+  try {
+    const envPath = path.join(process.cwd(), ".env.local");
+    if (fsSync.existsSync(envPath)) {
+      const content = fsSync.readFileSync(envPath, "utf-8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith("#") && trimmed.includes("=")) {
+          const [key, ...valParts] = trimmed.split("=");
+          if (key.trim() === envVarName) {
+            const val = valParts.join("=").trim().replace(/^["']|["']$/g, "");
+            process.env[envVarName] = val;
+            return val;
+          }
+        }
+      }
+    }
+  } catch {}
+
+  return "";
+}
+
+/** Sağlayıcı için API anahtarını .env.local dosyasına yazar. */
+export async function setProviderApiKey(envVarName: string, key: string): Promise<void> {
+  if (!envVarName || !key) return;
+  const envPath = path.join(process.cwd(), ".env.local");
+  try {
+    let content = "";
+    try {
+      content = await fs.readFile(envPath, "utf-8");
+    } catch {
+      content = "";
+    }
+    const lines = content.split("\n").filter((l) => !l.startsWith(`${envVarName}=`));
+    lines.push(`${envVarName}=${key.trim()}`);
+    await fs.writeFile(envPath, lines.join("\n") + "\n", "utf-8");
+    process.env[envVarName] = key.trim();
+  } catch (err) {
+    console.error("Failed to write .env.local", err);
+  }
 }
 
 // ─── Sessions ──────────────────────────────────────────────
@@ -127,38 +159,21 @@ export async function loadSession(id: string): Promise<SessionFile | null> {
   return readJson<SessionFile | null>(sessionPath(id), null);
 }
 
-const PROJECTS_BASE_DIR = path.resolve(process.cwd(), "..", "agent_system", "projects");
-
 export async function createSession(title: string, slug: string, projectDir?: string): Promise<SessionFile> {
   await ensureDataDirs();
   const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const now = new Date();
-  const nowIso = now.toISOString();
-
-  let resolvedDir = projectDir && projectDir.trim() ? projectDir.trim() : "";
-  // Eğer kullanıcı özel bir klasör seçmediyse, Python CLI ile birebir aynı:
-  // agent_system/projects/ altında her oturum için izole bir proje klasörü tahsis et
-  if (!resolvedDir) {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const cleanSlug = (slug || "yeni_proje").replace(/[^a-zA-Z0-9_\-]/g, "_").toLowerCase();
-    const folderName = `${dateStr}_${cleanSlug}`;
-    const baseDir = getProjectsBaseDir();
-    resolvedDir = path.join(baseDir, folderName);
-    try {
-      await fs.mkdir(resolvedDir, { recursive: true });
-    } catch {
-      // ignore
-    }
-  }
-
+  const now = new Date().toISOString();
+  const workspaceRoot = path.resolve(process.cwd(), "..");
+  const resolvedDir = projectDir && projectDir.trim()
+    ? projectDir.trim()
+    : workspaceRoot;
   const session: SessionFile = {
     session_id: id,
     title,
     slug,
     project_dir: resolvedDir,
-    created_at: nowIso,
-    updated_at: nowIso,
+    created_at: now,
+    updated_at: now,
     conversation_history: [],
   };
   await writeJson(sessionPath(id), session);
@@ -179,35 +194,8 @@ export async function saveSessionHistory(
 export async function updateSessionTitle(id: string, newTitle: string): Promise<void> {
   const session = await loadSession(id);
   if (!session) return;
-  const cleanTitle = newTitle.trim();
-  session.title = cleanTitle;
+  session.title = newTitle.trim();
   session.updated_at = new Date().toISOString();
-
-  // Eğer oturumun proje dizini PROJECTS_BASE_DIR içinde ve henüz "yeni_proje" ise,
-  // Python CLI gibi klasör adını yeni başlığın slug'ı ile güncelle:
-  const baseDir = getProjectsBaseDir();
-  if (
-    session.project_dir &&
-    (session.project_dir.startsWith(baseDir) || session.project_dir.includes("agent_system/projects") || session.project_dir.includes("/projects/")) &&
-    session.project_dir.includes("yeni_proje")
-  ) {
-    const parentDir = path.dirname(session.project_dir);
-    const oldBase = path.basename(session.project_dir);
-    const timePrefix = oldBase.split("_").slice(0, 2).join("_");
-    const newSlug = cleanTitle.toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").slice(0, 30);
-    if (newSlug) {
-      const newFolderName = `${timePrefix}_${newSlug}`;
-      const newDir = path.join(parentDir, newFolderName);
-      try {
-        await fs.rename(session.project_dir, newDir);
-        session.project_dir = newDir;
-        session.slug = newSlug;
-      } catch {
-        // rename başarısızsa eski yolda devam et
-      }
-    }
-  }
-
   await writeJson(sessionPath(id), session);
 }
 

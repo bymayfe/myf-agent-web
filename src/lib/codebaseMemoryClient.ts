@@ -36,7 +36,6 @@ class CodebaseMemoryClient {
   private isInitialized = false;
   private binaryPath: string | null = null;
   private isDisabled = false;
-  private _warnedMissing = false;
 
   private async findBinary(): Promise<string | null> {
     if (this.binaryPath) return this.binaryPath;
@@ -70,18 +69,6 @@ class CodebaseMemoryClient {
   public async isAvailable(): Promise<boolean> {
     if (this.isDisabled) return false;
     const bin = await this.findBinary();
-    if (!bin && !this._warnedMissing) {
-      // Sessiz başarısızlık yerine sunucu konsoluna bir kez uyarı basıyoruz —
-      // "codebase memory MCP çalışıyor mu?" sorusunun cevabı: hayır, çünkü
-      // binary hiçbir aday yolda bulunamadı. Beklenen konum:
-      // <proje_kökü>/third_party/codebase_memory/codebase-memory-mcp(.exe)
-      this._warnedMissing = true;
-      console.warn(
-        "[codebase-memory-mcp] Binary bulunamadı, bu eklenti bu oturumda pasif kalacak. " +
-          "Beklenen konum: <proje_kökü>/third_party/codebase_memory/codebase-memory-mcp " +
-          "veya ~/.local/bin/codebase-memory-mcp"
-      );
-    }
     return bin !== null;
   }
 

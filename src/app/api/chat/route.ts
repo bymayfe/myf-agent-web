@@ -164,10 +164,13 @@ export async function POST(req: NextRequest) {
         enqueue(sseLine("activity", actGroup));
       };
 
+      const pluginEnv = { ...process.env };
+      delete pluginEnv.PORT; // Kullanıcı projesine Web UI'ın 3111 portunun sızmasını engelle
+
       const pluginContext: PluginContext = {
         projectDir,
         sessionId: activeSessionId,
-        env: process.env as Record<string, string | undefined>,
+        env: pluginEnv as Record<string, string | undefined>,
         log: (msg) => {
           addEvent(actGroup, makeNoteEvent(msg));
           emitActivity();
@@ -244,9 +247,34 @@ export async function POST(req: NextRequest) {
             });
           }
           if (activeSessionId) await saveSessionHistory(activeSessionId, history);
-
           if (decision.immediateReply) enqueue(sseLine("content", decision.immediateReply));
-          if (decision.shouldStartPipeline) enqueue(sseLine("pipeline_start", "true"));
+          if (decision.shouldStartPipeline) {
+            const isGeneric = (t?: string) => {
+              if (!t) return true;
+              const s = t.trim().toLowerCase();
+              return (
+                s.startsWith("/") ||
+                s === "devam" ||
+                s === "devam et" ||
+                s === "continue" ||
+                s === "başlat" ||
+                s === "start" ||
+                s === "run" ||
+                s === "true" ||
+                s.includes("sonraki adımları tamamla") ||
+                s.includes("kaldığın yerden devam et")
+              );
+            };
+
+            let req = userPrompt;
+            if (isGeneric(userPrompt)) {
+              const lastUser = [...history].reverse().find(
+                (m) => m.role === "user" && !isGeneric(m.content)
+              );
+              if (lastUser?.content) req = lastUser.content;
+            }
+            enqueue(sseLine("pipeline_start", { requirement: req }));
+          }
           enqueue(sseLine("activity", actGroup));
           enqueue(sseLine("done", ""));
           return;
@@ -306,7 +334,7 @@ export async function POST(req: NextRequest) {
         let fullText = "";
         let fullThinking = "";
         let currentMessages: ChatMessage[] = [...messages];
-        const MAX_TOOL_ITERATIONS = 8;
+        const MAX_TOOL_ITERATIONS = 14;
         let iteration = 0;
         const previousCallsHistory: string[] = [];
 
@@ -479,17 +507,16 @@ export async function POST(req: NextRequest) {
           }
 
           if (iteration >= MAX_TOOL_ITERATIONS - 1) {
-            guidance += "\n\n⚠️ DİKKAT: Maksimum araç adımı sınırına yaklaşıyorsun. Bu turda ARTIK BAŞKA ARAÇ ÇAĞIRMA. Bulgularını özetle ve kullanıcıya eksiksiz nihai yanıtını / düzeltilmiş kodları ver.";
+            guidance += "\n\n⚠️ DİKKAT: Maksimum araç adımı sınırına yaklaşıyorsun. Bu turda ARTIK BAŞKA ARAÇ ÇAĞIRMA. Şimdiye kadar elde ettiğin bulguları özetle ve kullanıcıya eksiksiz nihai yanıtını sun. Eğer adımlar ve derleme başarıyla tamamlandıysa, projenin çalıştığını açıkça belirt; KESİNLİKLE olmayan hayali hatalar uydurma.";
           }
 
-          currentMessages = [
-            ...messages,
+          currentMessages.push(
             { role: "assistant", content: turnContent },
             {
               role: "user",
               content: guidance,
-            },
-          ];
+            }
+          );
         }
 
         // Eğer döngü MAX_TOOL_ITERATIONS ile bittiyse ve model kullanıcıya açık bir yanıt vermemişse,
@@ -504,7 +531,8 @@ export async function POST(req: NextRequest) {
                 ...messages,
                 {
                   role: "user",
-                  content: "Maksimum araç adımı sınırına ulaşıldı. Şimdiye kadar çalıştırdığın araçların çıktılarına göre tespit ettiğin sorunları, yaptığın veya yapılması gereken düzeltmeleri ve nihai durumu kullanıcıya eksiksiz, Türkçe ve net bir şekilde açıkla.",
+                  content:
+                    "Maksimum araç adımı sınırına ulaşıldı. Şimdiye kadar çalıştırdığın araçların çıktılarına göre gelinen nihai durumu kullanıcıya eksiksiz, tarafsız ve Türkçe olarak açıkla. ÖNEMLİ: Eğer proje derlemesi/testleri başarıyla tamamlandıysa (hata yoksa), projenin başarıyla çalıştığını ve nasıl test edileceğini netçe yaz. KESİNLİKLE gerçekte var olmayan hayali hatalar (örneğin uydurma TypeError veya port çakışmaları) uydurma.",
                 },
               ],
               model: effectiveModel,

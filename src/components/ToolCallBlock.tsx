@@ -209,20 +209,40 @@ export default function ToolCallBlock({ rawContent, isResult }: ToolCallBlockPro
           bg: "bg-emerald-950/20",
         };
       }
-      case "read_file":
-      case "list_directory":
-      case "search_symbols": {
-        const target = String(params.filePath || params.path || params.dirPath || "dosya");
-        const filename = target.split("/").pop() || target;
+      case "list_directory": {
+        const target = String(params.dirPath || params.path || "dizin");
+        const folderName = target.split("/").filter(Boolean).pop() || target;
         return {
           icon: Folder,
-          label: "Kod Tabanı Keşfi",
-          summary: filename,
+          label: "Dizin Listeleme",
+          summary: folderName,
           color: "text-blue-400",
           border: "border-blue-800/40",
           bg: "bg-blue-950/20",
         };
-
+      }
+      case "read_file": {
+        const target = String(params.filePath || params.path || "dosya");
+        const filename = target.split("/").pop() || target;
+        return {
+          icon: FileCode,
+          label: "Dosya Okuma",
+          summary: filename,
+          color: "text-sky-400",
+          border: "border-sky-800/40",
+          bg: "bg-sky-950/20",
+        };
+      }
+      case "search_symbols": {
+        const q = String(params.query || params.symbol || "sembol");
+        return {
+          icon: Search,
+          label: "Sembol Arama (AST)",
+          summary: `"${q}"`,
+          color: "text-indigo-400",
+          border: "border-indigo-800/40",
+          bg: "bg-indigo-950/20",
+        };
       }
       default:
         return {
@@ -272,7 +292,7 @@ export default function ToolCallBlock({ rawContent, isResult }: ToolCallBlockPro
       {open && (
         <div className="border-t border-gray-800/60 bg-gray-950/70 p-3 space-y-2.5 font-mono text-[11px]">
           {/* Parametreler */}
-          {paramKeys.length > 0 && (
+          {paramKeys.length > 0 ? (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
                 <span>Parametreler</span>
@@ -295,6 +315,11 @@ export default function ToolCallBlock({ rawContent, isResult }: ToolCallBlockPro
                   </div>
                 ))}
               </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-[#0a0b10] border border-gray-800/60 text-gray-400 text-[10.5px]">
+              <span>Parametre gerekmez — tüm proje kapsamı hedeflenir.</span>
+              <span className="text-purple-400 font-mono text-[10px]">{"{}"}</span>
             </div>
           )}
         </div>

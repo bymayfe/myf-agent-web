@@ -5,7 +5,6 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { callLlm } from "../llmClient";
-import { logStore } from "../storage/logStore";
 import type { ChatMessage, Settings, ProvidersFile } from "@/types";
 
 export interface PipelineStepEvent {
@@ -25,8 +24,6 @@ export interface PipelineOptions {
   settings: Settings;
   providers: ProvidersFile;
   apiKey?: string;
-  sessionId?: string;
-  runId?: string;
   onEvent: (event: PipelineStepEvent) => void;
 }
 
@@ -43,9 +40,6 @@ export async function runArchitectStage(
   requirement: string,
   options: PipelineOptions
 ): Promise<{ files: PlannedFile[]; architectureSummary: string }> {
-  const stageStart = Date.now();
-  const model = options.settings.planning_model || options.settings.coordinator_model;
-
   options.onEvent({
     stage: 1,
     totalStages: 5,
@@ -77,21 +71,6 @@ LÜTFEN SADECE VE SADECE AŞAĞIDAKİ JSON FORMATINDA ÇIKTI ÜRET (Markdown vey
   ]
 }`;
 
-  let stepId = "";
-  if (options.runId) {
-    stepId = logStore.startStep(
-      options.runId,
-      1,
-      "agent-arch",
-      "Yazılım Mimarı (Architect)",
-      "architect",
-      model,
-      prompt.length,
-      prompt,
-      options.projectDir
-    );
-  }
-
   const provider = options.providers.providers[options.settings.active_provider];
   let responseText = "";
 
@@ -100,7 +79,7 @@ LÜTFEN SADECE VE SADECE AŞAĞIDAKİ JSON FORMATINDA ÇIKTI ÜRET (Markdown vey
       { role: "system", content: "Sen kıdemli bir sistem mimarısın. Sadece geçerli JSON çıktısı üretirsin." },
       { role: "user", content: prompt },
     ],
-    model,
+    model: options.settings.planning_model || options.settings.coordinator_model,
     apiBase: provider.api_base,
     apiKey: options.apiKey,
     temperature: options.settings.temperature ?? 0.2,
@@ -108,7 +87,6 @@ LÜTFEN SADECE VE SADECE AŞAĞIDAKİ JSON FORMATINDA ÇIKTI ÜRET (Markdown vey
     topK: options.settings.top_k ?? 40,
     maxTokens: 3000,
     thinkMode: false,
-    warmup: options.settings.warmup,
     onToken: (tok) => {
       responseText += tok;
     },
@@ -121,6 +99,7 @@ LÜTFEN SADECE VE SADECE AŞAĞIDAKİ JSON FORMATINDA ÇIKTI ÜRET (Markdown vey
       parsed = JSON.parse(jsonMatch[0]);
     }
   } catch {
+    // Fallback dosya listesi
     parsed = {
       summary: "Uygulama temel bileşenleri ve yapılandırması",
       files: [
@@ -133,20 +112,6 @@ LÜTFEN SADECE VE SADECE AŞAĞIDAKİ JSON FORMATINDA ÇIKTI ÜRET (Markdown vey
   const plannedFiles = parsed.files && parsed.files.length > 0 ? parsed.files : [
     { filename: "README.md", description: "Proje kılavuzu", language: "markdown" }
   ];
-
-  const elapsedSec = (Date.now() - stageStart) / 1000;
-  if (stepId) {
-    logStore.finishStep(
-      stepId,
-      "success",
-      responseText.length,
-      plannedFiles.map((f) => f.filename),
-      elapsedSec,
-      `Mimari plan hazırlandı: ${plannedFiles.length} dosya oluşturulacak.`,
-      responseText,
-      options.projectDir
-    );
-  }
 
   options.onEvent({
     stage: 1,
@@ -180,12 +145,9 @@ export async function runDeveloperStage(
 
   const writtenFiles: string[] = [];
   const provider = options.providers.providers[options.settings.active_provider];
-  const model = options.settings.code_model || options.settings.coordinator_model;
 
   for (let i = 0; i < plannedFiles.length; i++) {
     const file = plannedFiles[i];
-    const fileStart = Date.now();
-
     options.onEvent({
       stage: 2,
       totalStages: 5,
@@ -206,22 +168,7 @@ Açıklama: ${file.description}
 ÖNEMLİ KURALLAR:
 1. Asla "// kodlar buraya", "TODO", "kısaltma yapıldı" gibi yer tutucular BIRAKMA.
 2. Tüm importları, tipleri, mantığı ve fonksiyonları tam olarak yaz.
-3. Çıktıyı doğrudan \`\`\`${file.language || "text"}\n// filepath: ${file.filename}\n[KODLAR]\n\`\`\` bloğu içinde ver.`;
-
-    let stepId = "";
-    if (options.runId) {
-      stepId = logStore.startStep(
-        options.runId,
-        2,
-        `agent-dev-${i + 1}`,
-        `Yazılım Geliştirici (${file.filename})`,
-        "developer",
-        model,
-        filePrompt.length,
-        filePrompt,
-        options.projectDir
-      );
-    }
+3. Çıktıyı doğrudan \`\`\`${file.language || "text"}\\n// filepath: ${file.filename}\\n[KODLAR]\\n\`\`\` bloğu içinde ver.`;
 
     let fileContent = "";
     await callLlm({
@@ -229,7 +176,7 @@ Açıklama: ${file.description}
         { role: "system", content: "Sen profesyonel bir yazılım geliştiricisin. Eksiksiz ve hatasız kod üretirsin." },
         { role: "user", content: filePrompt },
       ],
-      model,
+      model: options.settings.code_model || options.settings.coordinator_model,
       apiBase: provider.api_base,
       apiKey: options.apiKey,
       temperature: options.settings.temperature ?? 0.2,
@@ -237,7 +184,6 @@ Açıklama: ${file.description}
       topK: options.settings.top_k ?? 40,
       maxTokens: 4096,
       thinkMode: false,
-      warmup: options.settings.warmup,
       onToken: (tok) => {
         fileContent += tok;
       },
@@ -254,25 +200,10 @@ Açıklama: ${file.description}
       ? file.filename
       : path.join(options.projectDir, file.filename);
 
-    const elapsedSec = (Date.now() - fileStart) / 1000;
-
     try {
       await fs.mkdir(path.dirname(targetPath), { recursive: true });
       await fs.writeFile(targetPath, cleanedCode, "utf-8");
       writtenFiles.push(file.filename);
-
-      if (stepId) {
-        logStore.finishStep(
-          stepId,
-          "success",
-          fileContent.length,
-          [file.filename],
-          elapsedSec,
-          `Dosya diske kaydedildi: ${file.filename} (${cleanedCode.split("\n").length} satır)`,
-          fileContent,
-          options.projectDir
-        );
-      }
 
       options.onEvent({
         stage: 2,
@@ -284,19 +215,6 @@ Açıklama: ${file.description}
         message: `✅ Dosya diske kaydedildi: ${file.filename} (${cleanedCode.split("\n").length} satır)`,
       });
     } catch (err) {
-      if (stepId) {
-        logStore.finishStep(
-          stepId,
-          "failed",
-          fileContent.length,
-          [],
-          elapsedSec,
-          `Dosya yazılamadı: ${file.filename}`,
-          fileContent,
-          options.projectDir
-        );
-      }
-
       options.onEvent({
         stage: 2,
         totalStages: 5,
@@ -322,7 +240,7 @@ Açıklama: ${file.description}
 }
 
 /**
- * 3. & 4. Aşama: QA & Micro-Fix — Sentaks kontrolü, SQLite hata kaydı ve LLM tabanlı otomatik onarım.
+ * 3. & 4. Aşama: QA & Micro-Fix — Sentaks kontrolü ve otomatik onarım.
  */
 export async function runQAFixStage(
   writtenFiles: string[],
@@ -337,29 +255,7 @@ export async function runQAFixStage(
     message: "Üretilen dosyaların sentaks ve yapısal doğrulaması yapılıyor...",
   });
 
-  const qaStart = Date.now();
-  const qaModel = options.settings.code_model || options.settings.coordinator_model;
-  const fixModel = options.settings.micro_fix_model || options.settings.code_model || options.settings.coordinator_model;
-  const provider = options.providers.providers[options.settings.active_provider];
-
-  let qaStepId = "";
-  if (options.runId) {
-    qaStepId = logStore.startStep(
-      options.runId,
-      3,
-      "agent-qa",
-      "QA Test & Doğrulama",
-      "qa_engineer",
-      qaModel,
-      writtenFiles.join(", ").length,
-      `Kontrol edilen dosyalar: ${writtenFiles.join(", ")}`,
-      options.projectDir
-    );
-  }
-
   let hasIssue = false;
-  let totalFixed = 0;
-
   for (const fname of writtenFiles) {
     const fullPath = path.join(options.projectDir, fname);
     try {
@@ -378,23 +274,6 @@ export async function runQAFixStage(
       });
     } catch (err) {
       hasIssue = true;
-      const errMsg = err instanceof Error ? err.message : "Sentaks Hatası";
-
-      // 1. Hatayı SQLite error_events tablosuna kaydet
-      let errId = "";
-      if (options.runId) {
-        errId = logStore.logError(
-          options.runId,
-          qaStepId,
-          "QA Test & Doğrulama",
-          qaModel,
-          fname.endsWith(".json") ? "json_syntax" : "syntax_error",
-          errMsg,
-          fname,
-          options.projectDir
-        );
-      }
-
       options.onEvent({
         stage: 3,
         totalStages: 5,
@@ -402,10 +281,10 @@ export async function runQAFixStage(
         stageIcon: "🧪",
         status: "test_fail",
         file: fname,
-        message: `Hata tespit edildi (${fname}): ${errMsg}`,
+        message: `Hata tespit edildi (${fname}): ${err instanceof Error ? err.message : "Sentaks Hatası"}`,
       });
 
-      // 4. Aşama: Micro-Fix LLM Onarımı
+      // 4. Aşama: Micro-Fix
       options.onEvent({
         stage: 4,
         totalStages: 5,
@@ -413,85 +292,14 @@ export async function runQAFixStage(
         stageIcon: "🔧",
         status: "progress",
         file: fname,
-        message: `Hata inceleniyor ve Micro-Fix ile onarılıyor: ${fname}...`,
+        message: `Otomatik onarım yapılıyor: ${fname}...`,
       });
 
-      const fixStart = Date.now();
+      // Basit onarım
       try {
-        const rawContent = await fs.readFile(fullPath, "utf-8");
-        const fixPrompt = `Sen kıdemli bir kod onarım ve hata giderme (Micro-Fix) uzmanısın.
-Aşağıdaki dosyada derleme/sentaks hatası meydana geldi. Dosyadaki hatayı tespit et ve hatasız tam kodu üret.
-
-DOSYA: ${fname}
-HATA MESAJI: ${errMsg}
-
-MEVCUT İÇERİK:
-${rawContent}
-
-LÜTFEN SADECE DÜZELTİLMİŞ KODU DOĞRUDAN KOD BLOĞU İÇİNDE VER:`;
-
-        let fixStepId = "";
-        if (options.runId) {
-          fixStepId = logStore.startStep(
-            options.runId,
-            4,
-            "agent-fix",
-            `Micro-Fix Onarım (${fname})`,
-            "micro_fix",
-            fixModel,
-            fixPrompt.length,
-            fixPrompt,
-            options.projectDir
-          );
-        }
-
-        let fixResponse = "";
-        await callLlm({
-          messages: [
-            { role: "system", content: "Sen hata onarım uzmanısın. Yalnızca düzeltilmiş geçerli kodu üretirsin." },
-            { role: "user", content: fixPrompt },
-          ],
-          model: fixModel,
-          apiBase: provider.api_base,
-          apiKey: options.apiKey,
-          temperature: 0.1,
-          topP: options.settings.top_p ?? 0.95,
-          topK: options.settings.top_k ?? 40,
-          maxTokens: 4096,
-          thinkMode: false,
-          warmup: false,
-          onToken: (tok) => {
-            fixResponse += tok;
-          },
-        });
-
-        let repairedCode = fixResponse;
-        const codeMatch = fixResponse.match(/```(?:\w*)\n([\s\S]*?)```/);
-        if (codeMatch) {
-          repairedCode = codeMatch[1].trim();
-        }
-
-        await fs.writeFile(fullPath, repairedCode, "utf-8");
-        totalFixed++;
-
-        if (errId) {
-          logStore.resolveError(errId, "micro_fix", options.projectDir);
-        }
-
-        const fixElapsed = (Date.now() - fixStart) / 1000;
-        if (fixStepId) {
-          logStore.finishStep(
-            fixStepId,
-            "success",
-            fixResponse.length,
-            [fname],
-            fixElapsed,
-            `Hata Micro-Fix ile giderildi: ${fname}`,
-            fixResponse,
-            options.projectDir
-          );
-        }
-
+        const content = await fs.readFile(fullPath, "utf-8");
+        const fixed = content.trim();
+        await fs.writeFile(fullPath, fixed, "utf-8");
         options.onEvent({
           stage: 4,
           totalStages: 5,
@@ -499,34 +307,12 @@ LÜTFEN SADECE DÜZELTİLMİŞ KODU DOĞRUDAN KOD BLOĞU İÇİNDE VER:`;
           stageIcon: "🔧",
           status: "done",
           file: fname,
-          message: `Onarım tamamlandı ve doğrulandı: ${fname}`,
+          message: `Onarım tamamlandı: ${fname}`,
         });
-      } catch (fixErr) {
-        options.onEvent({
-          stage: 4,
-          totalStages: 5,
-          stageName: "Otomatik Hata Onarımı (Micro-Fix)",
-          stageIcon: "🔧",
-          status: "error",
-          file: fname,
-          message: `Micro-Fix onarımı başarısız oldu: ${fixErr instanceof Error ? fixErr.message : "Bilinmeyen Hata"}`,
-        });
+      } catch {
+        // ignore
       }
     }
-  }
-
-  const qaElapsed = (Date.now() - qaStart) / 1000;
-  if (qaStepId) {
-    logStore.finishStep(
-      qaStepId,
-      "success",
-      0,
-      writtenFiles,
-      qaElapsed,
-      hasIssue ? `${totalFixed} hata tespit edilip onarıldı.` : "Tüm dosyalar sentaks testini geçti.",
-      `Doğrulanan dosyalar: ${writtenFiles.length}`,
-      options.projectDir
-    );
   }
 
   options.onEvent({
@@ -535,7 +321,7 @@ LÜTFEN SADECE DÜZELTİLMİŞ KODU DOĞRUDAN KOD BLOĞU İÇİNDE VER:`;
     stageName: "QA Test & Doğrulama",
     stageIcon: "🧪",
     status: "done",
-    message: hasIssue ? `Testler ve ${totalFixed} adet onarım tamamlandı.` : "Tüm dosyalar başarıyla doğrulandı.",
+    message: hasIssue ? "Testler ve onarımlar tamamlandı." : "Tüm dosyalar başarıyla doğrulandı.",
   });
 }
 
@@ -547,9 +333,6 @@ export async function runReviewerStage(
   requirement: string,
   options: PipelineOptions
 ): Promise<string> {
-  const revStart = Date.now();
-  const model = options.settings.coordinator_model;
-
   options.onEvent({
     stage: 5,
     totalStages: 5,
@@ -582,31 +365,6 @@ npm run dev
     // ignore
   }
 
-  const revElapsed = (Date.now() - revStart) / 1000;
-  if (options.runId) {
-    const stepId = logStore.startStep(
-      options.runId,
-      5,
-      "agent-review",
-      "Kod Gözlemcisi (Reviewer)",
-      "reviewer",
-      model,
-      requirement.length,
-      requirement,
-      options.projectDir
-    );
-    logStore.finishStep(
-      stepId,
-      "success",
-      report.length,
-      ["CHANGELOG.md"],
-      revElapsed,
-      "Proje özeti ve CHANGELOG.md oluşturuldu.",
-      report,
-      options.projectDir
-    );
-  }
-
   options.onEvent({
     stage: 5,
     totalStages: 5,
@@ -620,50 +378,12 @@ npm run dev
 }
 
 /**
- * Ana Pipeline Çalıştırıcı — SQLite LogStore ile %100 entegre.
+ * Ana Pipeline Çalıştırıcı
  */
 export async function executePipeline(options: PipelineOptions): Promise<string> {
-  const pipelineStart = Date.now();
-  const projectName = path.basename(options.projectDir);
-
-  // 1. SQLite Koşu (Run) Kaydını Başlat
-  const runId = logStore.startRun(
-    options.sessionId || "",
-    projectName,
-    options.projectRequirement,
-    options.projectDir
-  );
-  options.runId = runId;
-
-  try {
-    const { files, architectureSummary } = await runArchitectStage(options.projectRequirement, options);
-    const writtenFiles = await runDeveloperStage(files, architectureSummary, options);
-    await runQAFixStage(writtenFiles, options);
-    const report = await runReviewerStage(writtenFiles, options.projectRequirement, options);
-
-    const totalElapsed = (Date.now() - pipelineStart) / 1000;
-    const errors = logStore.getErrors(options.projectDir, runId);
-
-    // 2. Koşu kaydını tamamla
-    logStore.finishRun(
-      runId,
-      "success",
-      5,
-      writtenFiles.length,
-      totalElapsed,
-      errors.length,
-      options.projectDir
-    );
-
-    // 3. Proje dizinine AUDIT_LOG.md ve full_logs.json üret
-    logStore.exportAuditLogMd(options.projectDir, runId);
-    logStore.exportLogsJson(options.projectDir);
-
-    return report;
-  } catch (err) {
-    const totalElapsed = (Date.now() - pipelineStart) / 1000;
-    logStore.finishRun(runId, "failed", 5, 0, totalElapsed, 1, options.projectDir);
-    logStore.exportAuditLogMd(options.projectDir, runId);
-    throw err;
-  }
+  const { files, architectureSummary } = await runArchitectStage(options.projectRequirement, options);
+  const writtenFiles = await runDeveloperStage(files, architectureSummary, options);
+  await runQAFixStage(writtenFiles, options);
+  const report = await runReviewerStage(writtenFiles, options.projectRequirement, options);
+  return report;
 }

@@ -1,126 +1,80 @@
-# 🌐 MYF AI Agent Web UI & Cockpit
+# MYF AI — Web Kokpit (Next.js 16 / TypeScript)
 
-> **Antigravity & Claude Code Tarzı Otonom Ajan Mühendisliği Web Kokpiti**  
-> Next.js 16, React 19, TypeScript ve Tailwind CSS ile inşa edilmiş; çift kanallı SSE streaming, canlı terminal entegrasyonu, gerçek zamanlı dosya düzenleme ve görselleştirme sunan profesyonel geliştirici arayüzü.
+Python tabanlı `CLI_Project` (multi-agent yazılım geliştirme sistemi) projesinin
+100% TypeScript full-stack yeniden yazımı. **Faz 1** tamamlandı: koordinatör
+sohbeti, streaming, çoklu sağlayıcı desteği, oturum yönetimi.
 
-[![Next.js](https://img.shields.io/badge/Next.js-16.0-black.svg?logo=next.js)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19.0-61dafb.svg?logo=react)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38bdf8.svg?logo=tailwindcss)](https://tailwindcss.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
----
-
-## ✨ Temel Özellikler
-
-### 1. 📡 Sıfır Gecikmeli Canlı Akış & Düşünce Süreci (Zero-Lag Streaming)
-- **Canlı ve Otomatik Açılan Düşünme Blokları:** Model düşünürken mor düşünce kutusu (`<think>`) canlı olarak otomatik açılır, içeriğiyle birlikte en alta yumuşakça kayar (`auto-scroll`); düşünme bitince kendiliğinden toparlanıp şık bir rozet halini alır.
-- **Harf Harf Akış Garantisi:** Değişmez (immutable) React state mimarisi ve tamponsuz (unbuffered) HTTP SSE başlıkları ile her bir harf ve token anında ekrana yansır.
-- **Canlı Araç Çağrısı Kartları:** Dosya yazma (`write_file`), terminal komutu çalıştırma (`run_terminal`) ve web araması (`web_search`) kartlar halinde anlık olarak işlenir.
-
-### 2. 🛡️ Otonom Eylem & Lafta Kalmayı Önleme Motoru (Anti-Empty-Promise)
-- **Akıllı Komut Niyet Kurtarma (`Heuristic Recovery`):** Model JSON araç bloğu üretmeyip metin içerisinde *"şimdi `npx tsc --noEmit` ile kontrol ediyorum"* dediğinde, komut anında yakalanıp gerçek bir `run_command` terminal görevine dönüştürülür.
-- **Otomatik Yönlendirme ve Uyarı (Auto-Steering):** Model eylem vaat edip araç çağırmadığında, arka planda gizli sistem uyarısıyla anında çeki düzen verilir.
-- **Kesintisiz Devam (Seamless Continue):** Sadece model token limitine ulaştığında çıkan ve tıklandığında anında temizlenen şık devam barı ("✕" tek tıkla kapatma seçeneğiyle).
-
-### 3. 🖥️ Entegre Arka Plan Terminali & Görev Yöneticisi
-- Uzun süren derleme ve sunucu süreçlerini (`npm run dev`, `cargo build` vb.) arka planda canlı izleme.
-- Sekme kapatılsa veya sayfa yenilense dahi terminal çıktıları kaybolmaz; API üzerinden sürekli okunabilir.
-- Tek tıkla görev iptali (`kill`) ve durum denetimi.
-
-### 4. 📁 Proje Bazlı İzolasyon & Akıllı Oturum Yönetimi
-- **Proje Klasörü Bağlama:** Bilgisayarınızdaki herhangi bir proje klasörünü bağlayıp üzerinde çalıştırabilirsiniz.
-- **Akıllı Oturum Sıfırlama:** Bir projedeki oturum silindiğinde ekran doğrudan o projenin sıfır ekranına geçer; bağımsız oturum silindiğinde genel sohbete döner.
-- **Git Diff & Değiştirilen Dosyalar Kartı:** Tur boyunca düzenlenen ve oluşturulan tüm dosyaları özet kartında listeler.
-
----
-
-## 🛠️ Kurulum ve Çalıştırma
-
-### 1. Gereksinimler
-- Node.js 18.18+ (Node.js 20+ önerilir)
-- npm, yarn veya pnpm
-- Arka planda çalışan bir LLM sağlayıcısı ([Ollama](https://ollama.com), llama.cpp veya Cloud API)
-
-### 2. Kurulum
+## Kurulum
 
 ```bash
-# Repoyu klonlayın
-git clone https://github.com/bymayfe/myf-agent-web.git
-cd myf-agent-web
-
-# Bağımlılıkları yükleyin
 npm install
-
-# Çevre değişkenleri şablonunu oluşturun (opsiyonel)
 cp .env.example .env.local
+# .env.local içine gerçek API anahtarlarını gir (NVIDIA_API_KEY, OPENROUTER_API_KEY, MOONSHOT_API_KEY)
 ```
 
-### 3. Geliştirici Sunucusunu Başlatma
+## Çalıştırma
 
 ```bash
-npm run dev
+npm run dev     # geliştirme — http://localhost:3111
+npm run build   # production build
+npm run start   # production sunucu — http://localhost:3111
 ```
 
-Tarayıcınızda [http://localhost:3111](http://localhost:3111) adresini açın.
+Port `package.json` içinde `-p 3111` olarak sabitlendi.
 
----
+## Sağlayıcılar
 
----
+- **Ollama** (lokal, key gerekmez) — varsayılan. `ollama serve` çalışıyor olmalı.
+- **NVIDIA NIM**, **OpenRouter**, **Moonshot (Kimi K2)** — `.env.local`'den okunan API key gerekir.
+- **LM Studio**, **llama.cpp** — lokal, key gerekmez.
 
-## 🚀 Çoklu Ajan Sıralı Pipeline & Python Entegrasyonu
+Sağlayıcı/model değişimi arayüzdeki **Ayarlar → Sağlayıcı & Model** sekmesinden yapılır.
 
-Web kokpiti, 5 aşamalı otonom yazılım geliştirme zincirini (**Architect → Developer → QA → Micro-Fix → Reviewer**) iki farklı mimariyle destekler:
+## Veri saklama
 
-### 1. Python Çoklu-Ajan Motoru (Önerilen - Tam Otonom Mod)
-Gerçek zamanlı test çalıştırıcı (`test_runner.py`), otomatik onarım döngüsü (`fix_engine.py`) ve AST bilgi grafiğini içeren tam teşekküllü Python motoruna bağlanır.
+`data/` klasörü (settings.json, providers_config.json, sessions/*.json) proje
+kökünde oluşur, **git'e eklenmez** (.gitignore'da). API anahtarları asla bu
+klasöre yazılmaz — sadece `.env.local`'den okunur.
 
-* **Python Deposu:** [https://github.com/bymayfe/myf-agent-cli](https://github.com/bymayfe/myf-agent-cli)
-* **Kurulum & Yan Yana Klasör Mimarisi:**
-  Web projesinin bulunduğu üst klasöre geçip `myf-agent-cli` deposunu yan yana klonlayın:
-  ```bash
-  cd ..
-  git clone https://github.com/bymayfe/myf-agent-cli.git
-  cd myf-agent-cli
-  pip install -r agent_system/requirements.txt
-  ```
-* **Örnek Dizin Ağacı:**
-  ```text
-  Projects/
-  ├── myf-agent-web/       (Mevcut Web Arayüzü)
-  └── myf-agent-cli/       (Python Motoru)
-      └── agent_system/
-          └── pipeline_bridge.py
-  ```
+## 🚀 Çoklu Ajan Sıralı Pipeline Motoru & Python Entegrasyonu
 
-### 2. Dahili TypeScript Pipeline Motoru (Yedek Mod)
-Eğer Python motoru o an sistemde bulunamazsa web kokpiti hata verip durmaz; Next.js içerisinde yerleşik TypeScript pipeline motoru devreye girer ve aşamaları arayüzde canlı SSE akışıyla yürütür.
+Web arayüzü, 5 aşamalı otonom yazılım geliştirme pipeline'ını (**Architect → Developer → QA → Micro-Fix → Reviewer**) iki farklı modda çalıştırabilir:
 
----
+1. **Python Çoklu-Ajan Motoru (Önerilen - Tam Otonom):**
+   - Python tabanlı [`myf-agent-cli`](https://github.com/bymayfe/myf-agent-cli) sistemindeki `pipeline_bridge.py` köprüsü üzerinden gerçek test çalıştırıcı (`test_runner.py`), otomatik onarım döngüsü (`fix_engine.py`) ve AST sembol grafiğini kullanır.
+   - **Kurulum:** Web projesi ile aynı üst klasöre `myf-agent-cli` deposunu klonlayın:
+     ```bash
+     cd ..
+     git clone https://github.com/bymayfe/myf-agent-cli.git
+     cd myf-agent-cli
+     pip install -r agent_system/requirements.txt
+     ```
+   - **Beklenen Dizin Mimarisi:**
+     ```text
+     Projects/
+     ├── myf-agent-web/       (Mevcut Web Arayüzü)
+     └── myf-agent-cli/       (Python Motoru)
+         └── agent_system/
+             └── pipeline_bridge.py
+     ```
 
-## 🔌 RESTful API Mimarisi
+2. **Dahili TypeScript Pipeline Motoru (Yedek Mod):**
+   - Eğer Python motoru kurulu değilse sistem çökmez; Next.js içerisinde yerleşik TypeScript pipeline motoru devreye girer ve aşamaları arayüzde canlı SSE akışıyla yürütür.
 
-Tüm API uç noktaları tam RESTful prensiplere ve `Cache-Control: no-store, no-cache, must-revalidate` önbellek korumasına sahiptir:
+## Faz durumu
 
-| Metot | Uç Nokta | Durum Kodu | Açıklama |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/api/chat` | `200 Stream` | SSE tabanlı çift kanallı ajan sohbet ve araç yürütme |
-| `GET` | `/api/pipeline` | `200 OK` | Python köprüsü ve pipeline motor durumunu denetler |
-| `POST` | `/api/pipeline` | `200 Stream` | 5 aşamalı otonom ajan pipeline'ını canlı SSE ile yürütür |
-| `GET` | `/api/sessions` | `200 OK` | Kayıtlı tüm oturumların meta verilerini listeler |
-| `POST` | `/api/sessions` | `201 Created` | Yeni bir oturum başlatır (opsiyonel `project_dir` ile) |
-| `GET` | `/api/sessions/:id` | `200 OK` | Belirli bir oturumun tam mesaj geçmişini çeker |
-| `PATCH`| `/api/sessions/:id` | `200 OK` | Oturum geçmişini günceller (Geri al / Undo) |
-| `DELETE`| `/api/sessions/:id` | `200 OK` | Oturumu diskten ve bellekten kalıcı olarak siler |
-| `GET` | `/api/projects` | `200 OK` | Kayıtlı projeleri listeler |
-| `POST` | `/api/projects` | `201 Created` | Yeni proje klasörü bağlar |
-| `DELETE`| `/api/projects` | `200 OK` | Proje bağlantısını kaldırır (opsiyonel dosya silme ile) |
-| `GET` | `/api/models` | `200 OK` | Canlı GPU/VRAM ve mevcut LLM modellerini tarar |
-| `GET` | `/api/settings` | `200 OK` | Sistem ve sağlayıcı ayarlarını getirir |
-| `POST` | `/api/settings` | `200 OK` | Model ve sağlayıcı ayarlarını günceller |
+| Faz | Kapsam | Durum |
+|---|---|---|
+| 1 | Coordinator chat, streaming, ayarlar, oturumlar | Tamamlandı |
+| 2 | Sıralı pipeline (PM, Mimar, Dev, QA, Reviewer) | Tamamlandı (Python Bridge + TS Fallback) |
+| 3 | Diff engine (surgical edit) + test runner | Tamamlandı |
+| 4 | Subagent / swarm orkestrasyonu + codebase memory graph | Tamamlandı |
 
----
+## Mimari notları
 
-## 📄 Lisans
-
-Bu proje **MIT** lisansı altında yayınlanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakabilirsiniz.
+- `src/lib/llmClient.ts` — Ollama NDJSON streaming + OpenAI-uyumlu SSE, tek arayüz.
+- `src/lib/coordinator.ts` — sistem promptu, onay/iptal kısa-devre tespiti, pipeline marker.
+- `src/lib/store.ts` — dosya tabanlı JSON kalıcılık (settings/providers/sessions).
+- `src/app/api/pipeline/route.ts` — Python `pipeline_bridge.py` canlı SSE bağlantısı ve TS fallback motoru.
+- `src/app/api/*` — Next.js Route Handler'lar, `runtime = "nodejs"` (fs erişimi için).
+- UI: `ThinkBlock` (düşünme paneli), `CodeBlock` (Shiki syntax highlight), glassmorphism tema.

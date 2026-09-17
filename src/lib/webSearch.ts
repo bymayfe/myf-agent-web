@@ -61,31 +61,154 @@ async function searchTavily(
   };
 }
 
-// ─── NPM Registry Doğrudan Paket Arama (Sürüm & Paket Bilgisi) ─────────────
-async function searchNpmRegistry(query: string): Promise<SearchResult | null> {
+// ─── Paket Registry Alias & Squat Koruması ─────────────────────────────────
+
+const NPM_PACKAGE_ALIASES: Record<string, string> = {
+  "nextjs": "next",
+  "next.js": "next",
+  "next": "next",
+  "reactjs": "react",
+  "react.js": "react",
+  "react": "react",
+  "reactdom": "react-dom",
+  "react-dom": "react-dom",
+  "vuejs": "vue",
+  "vue.js": "vue",
+  "vue": "vue",
+  "tailwindcss": "tailwindcss",
+  "tailwind": "tailwindcss",
+  "svelte": "svelte",
+  "sveltekit": "@sveltejs/kit",
+  "svelte-kit": "@sveltejs/kit",
+  "nestjs": "@nestjs/core",
+  "nest.js": "@nestjs/core",
+  "expressjs": "express",
+  "express.js": "express",
+  "express": "express",
+  "remix": "@remix-run/react",
+  "remix.run": "@remix-run/react",
+  "angular": "@angular/core",
+  "angularjs": "@angular/core",
+  "shadcn": "shadcn-ui",
+  "shadcn-ui": "shadcn-ui",
+  "lucide": "lucide-react",
+  "lucide-react": "lucide-react",
+  "typescript": "typescript",
+  "prisma": "prisma",
+  "zustand": "zustand",
+  "redux": "redux",
+  "axios": "axios",
+  "vite": "vite",
+  "turbo": "turbo",
+  "bun": "bun",
+  "hono": "hono",
+  "zod": "zod",
+  "astro": "astro",
+};
+
+const PYPI_PACKAGE_ALIASES: Record<string, string> = {
+  "fastapi": "fastapi",
+  "django": "django",
+  "flask": "flask",
+  "pydantic": "pydantic",
+  "sqlalchemy": "sqlalchemy",
+  "celery": "celery",
+  "pytest": "pytest",
+  "requests": "requests",
+  "numpy": "numpy",
+  "pandas": "pandas",
+  "torch": "torch",
+  "pytorch": "torch",
+  "transformers": "transformers",
+  "langchain": "langchain",
+  "litellm": "litellm",
+  "uvicorn": "uvicorn",
+};
+
+// Squat / terk edilmiş yanıltıcı paket bağlantılarını filtreleme deseni (örn. npmjs.com/package/nextjs 0.0.3)
+const SQUAT_URL_REGEX = /https?:\/\/(?:www\.)?npmjs\.com\/package\/(?:nextjs|reactjs|vuejs|expressjs)(?:[/?#]|$)/i;
+
+// ─── NPM & PyPI Registry Doğrudan Paket Arama (Sürüm & Paket Bilgisi) ───────
+async function searchPackageRegistry(query: string): Promise<SearchResult | null> {
   const q = query.toLowerCase();
-  const pkgMatch = /\b(next\.?js|next|react|typescript|tailwindcss|tailwind|vue|svelte|express|prisma|zustand|axios|vite|turbo|bun|hono)\b/i.exec(q);
-  if (!pkgMatch) return null;
 
-  let pkgName = pkgMatch[1].toLowerCase();
-  if (pkgName === "next.js") pkgName = "next";
-  if (pkgName === "tailwindcss") pkgName = "tailwindcss";
+  // 1. Doğrudan paket komutları (npm i, pnpm add, pip install vs.)
+  const explicitNpm = /\b(?:npm\s+(?:i|install)|yarn\s+add|pnpm\s+add|bun\s+add|package)\s+([@a-zA-Z0-9_\-\.\/]+)/i.exec(q);
+  const explicitPip = /\b(?:pip\s+install|python\s+package)\s+([a-zA-Z0-9_\-\.]+)/i.exec(q);
 
-  try {
-    const res = await fetch(`https://registry.npmjs.org/${pkgName}/latest`, {
-      headers: { "User-Agent": "MYF-Agent/1.0" },
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return {
-      title: `${data.name} v${data.version} - npm Official Registry`,
-      url: `https://www.npmjs.com/package/${data.name}`,
-      snippet: `En güncel resmi ${data.name} sürümü: ${data.version}. Açıklama: ${data.description || "NPM Paketi"}. Lisans: ${data.license || "MIT"}. Kurulum: npm i ${data.name}@${data.version}`,
-      score: 1.0,
-    };
-  } catch {
-    return null;
+  let matchedNpm = explicitNpm ? explicitNpm[1].toLowerCase() : null;
+  let matchedPypi = explicitPip ? explicitPip[1].toLowerCase() : null;
+
+  if (matchedNpm && NPM_PACKAGE_ALIASES[matchedNpm]) {
+    matchedNpm = NPM_PACKAGE_ALIASES[matchedNpm];
   }
+  if (matchedPypi && PYPI_PACKAGE_ALIASES[matchedPypi]) {
+    matchedPypi = PYPI_PACKAGE_ALIASES[matchedPypi];
+  }
+
+  // 2. Cümle içi anahtar kelime eşleştirme
+  if (!matchedNpm && !matchedPypi) {
+    const tokens = q.match(/[a-zA-Z0-9_\.\-]+/g) || [];
+    for (const t of tokens) {
+      if (NPM_PACKAGE_ALIASES[t]) {
+        matchedNpm = NPM_PACKAGE_ALIASES[t];
+        break;
+      } else if (PYPI_PACKAGE_ALIASES[t]) {
+        matchedPypi = PYPI_PACKAGE_ALIASES[t];
+        break;
+      }
+    }
+  }
+
+  // 3. NPM Registry Sorgusu
+  if (matchedNpm) {
+    try {
+      const res = await fetch(`https://registry.npmjs.org/${encodeURIComponent(matchedNpm)}/latest`, {
+        headers: { "User-Agent": "MYF-Agent/1.0", "Accept": "application/json" },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const name = data.name || matchedNpm;
+        const version = data.version || "Bilinmiyor";
+        const desc = data.description || "NPM Paketi";
+        const license = data.license || "MIT";
+        return {
+          title: `${name} v${version} - npm Official Registry`,
+          url: `https://www.npmjs.com/package/${name}`,
+          snippet: `En güncel resmi ${name} sürümü: ${version}. Açıklama: ${desc}. Lisans: ${license}. Kurulum: npm i ${name}@${version}`,
+          score: 1.0,
+        };
+      }
+    } catch {
+      // devam et
+    }
+  }
+
+  // 4. PyPI Registry Sorgusu
+  if (matchedPypi) {
+    try {
+      const res = await fetch(`https://pypi.org/pypi/${encodeURIComponent(matchedPypi)}/json`, {
+        headers: { "User-Agent": "MYF-Agent/1.0", "Accept": "application/json" },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const info = data.info || {};
+        const name = info.name || matchedPypi;
+        const version = info.version || "Bilinmiyor";
+        const summary = info.summary || "Python Paketi";
+        return {
+          title: `${name} v${version} - PyPI Official Registry`,
+          url: `https://pypi.org/project/${name}/`,
+          snippet: `En güncel resmi ${name} sürümü: ${version}. Açıklama: ${summary}. Kurulum: pip install ${name}==${version}`,
+          score: 1.0,
+        };
+      }
+    } catch {
+      // devam et
+    }
+  }
+
+  return null;
 }
 
 // ─── DuckDuckGo Canlı HTML & Lite Arama Fallback ──────────────────────────────
@@ -112,29 +235,30 @@ async function searchDuckDuckGoLite(query: string, maxResults = 5): Promise<Sear
 
     const snippets: string[] = [];
     let sm: RegExpExecArray | null;
-    while ((sm = snippetRe.exec(html)) !== null && snippets.length < maxResults) {
+    while ((sm = snippetRe.exec(html)) !== null && snippets.length < maxResults * 2) {
       const clean = sm[1].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#x27;/g, "'").replace(/&quot;/g, '"').trim();
       if (clean) snippets.push(clean);
     }
 
     const links: Array<{ url: string; title: string }> = [];
     let lm: RegExpExecArray | null;
-    while ((lm = linkRe.exec(html)) !== null && links.length < maxResults) {
+    while ((lm = linkRe.exec(html)) !== null && links.length < maxResults * 2) {
       let u = lm[1];
       if (u.includes("uddg=")) {
         const uddg = /uddg=([^&]+)/.exec(u);
         if (uddg) u = decodeURIComponent(uddg[1]);
       }
+      if (SQUAT_URL_REGEX.test(u)) continue;
       const title = lm[2].replace(/<[^>]+>/g, "").trim();
       links.push({ url: u, title });
+      if (links.length >= maxResults) break;
     }
 
-    for (let i = 0; i < snippets.length; i++) {
-      const linkInfo = links[i] || { url: "https://duckduckgo.com", title: `Arama Sonucu ${i + 1}` };
+    for (let i = 0; i < links.length; i++) {
       results.push({
-        title: linkInfo.title,
-        url: linkInfo.url,
-        snippet: snippets[i],
+        title: links[i].title,
+        url: links[i].url,
+        snippet: snippets[i] || "",
       });
     }
 
@@ -163,7 +287,7 @@ async function searchDuckDuckGoHtml(query: string, maxResults = 5): Promise<Sear
   const rawMatches: Array<{ rawUrl: string; snippet: string }> = [];
   let m: RegExpExecArray | null;
 
-  while ((m = snippetRe.exec(html)) !== null && rawMatches.length < maxResults) {
+  while ((m = snippetRe.exec(html)) !== null && rawMatches.length < maxResults * 2) {
     const rawUrl = m[1];
     const cleanSnippet = m[2].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;/g, "'").trim();
     if (cleanSnippet) {
@@ -180,6 +304,7 @@ async function searchDuckDuckGoHtml(query: string, maxResults = 5): Promise<Sear
       }
     }
     if (cleanUrl.startsWith("//")) cleanUrl = "https:" + cleanUrl;
+    if (SQUAT_URL_REGEX.test(cleanUrl)) continue;
 
     let title = "";
     try {
@@ -195,14 +320,15 @@ async function searchDuckDuckGoHtml(query: string, maxResults = 5): Promise<Sear
       url: cleanUrl,
       snippet: item.snippet,
     });
+    if (results.length >= maxResults) break;
   }
 
   return results;
 }
 
 async function searchDuckDuckGo(query: string, maxResults = 5): Promise<WebSearchResponse> {
-  // 1. Önce NPM paket sorgusu olup olmadığını kontrol et
-  const npmRes = await searchNpmRegistry(query).catch(() => null);
+  // 1. Önce NPM / PyPI paket sorgusu olup olmadığını kontrol et
+  const pkgRes = await searchPackageRegistry(query).catch(() => null);
 
   // 2. DuckDuckGo HTML dene
   let htmlResults = await searchDuckDuckGoHtml(query, maxResults).catch(() => []);
@@ -213,14 +339,14 @@ async function searchDuckDuckGo(query: string, maxResults = 5): Promise<WebSearc
   }
 
   const combinedResults: SearchResult[] = [];
-  if (npmRes) combinedResults.push(npmRes);
+  if (pkgRes) combinedResults.push(pkgRes);
   combinedResults.push(...htmlResults);
 
   if (combinedResults.length > 0) {
     return {
       query,
       backend: "duckduckgo",
-      answer: npmRes ? npmRes.snippet : undefined,
+      answer: pkgRes ? pkgRes.snippet : undefined,
       results: combinedResults.slice(0, maxResults),
     };
   }
@@ -243,21 +369,23 @@ async function searchDuckDuckGo(query: string, maxResults = 5): Promise<WebSearc
     });
   }
 
-  for (const topic of (data.RelatedTopics ?? []).slice(0, maxResults - results.length)) {
+  for (const topic of (data.RelatedTopics ?? [])) {
     if (topic.Text && topic.FirstURL) {
+      if (SQUAT_URL_REGEX.test(topic.FirstURL)) continue;
       results.push({
         title: topic.Text.split(" - ")[0] ?? topic.Text.slice(0, 60),
         url: topic.FirstURL,
         snippet: topic.Text,
       });
+      if (results.length >= maxResults) break;
     }
   }
 
   return {
     query,
     backend: "duckduckgo",
-    answer: data.AbstractText || undefined,
-    results: results.length > 0 ? results : (npmRes ? [npmRes] : []),
+    answer: data.AbstractText || (pkgRes ? pkgRes.snippet : undefined),
+    results: results.length > 0 ? results : (pkgRes ? [pkgRes] : []),
   };
 }
 
@@ -271,9 +399,17 @@ export async function webSearch(
   const { maxResults = 5 } = options;
   const tavilyKey = process.env.TAVILY_API_KEY ?? "";
 
+  // Paket sorgusu varsa (Next.js, React, FastAPI vs.), her zaman önce resmi registry'den doğru sürümü al
+  const pkgRes = await searchPackageRegistry(query).catch(() => null);
+
   if (tavilyKey.trim()) {
     try {
-      return await searchTavily(query, tavilyKey, maxResults);
+      const tavilyRes = await searchTavily(query, tavilyKey, maxResults);
+      if (pkgRes) {
+        tavilyRes.results = [pkgRes, ...tavilyRes.results.filter((r) => !SQUAT_URL_REGEX.test(r.url))].slice(0, maxResults);
+        tavilyRes.answer = pkgRes.snippet + (tavilyRes.answer ? `\n\n${tavilyRes.answer}` : "");
+      }
+      return tavilyRes;
     } catch (err) {
       console.warn("[webSearch] Tavily başarısız, DuckDuckGo'ya geçiliyor:", err);
     }
@@ -282,6 +418,14 @@ export async function webSearch(
   try {
     return await searchDuckDuckGo(query, maxResults);
   } catch (err) {
+    if (pkgRes) {
+      return {
+        query,
+        backend: "duckduckgo",
+        answer: pkgRes.snippet,
+        results: [pkgRes],
+      };
+    }
     return {
       query,
       backend: "error",

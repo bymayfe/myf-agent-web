@@ -25,7 +25,7 @@ interface SettingsModalProps {
   onClose: () => void;
   settings: Settings;
   providers: ProvidersFile;
-  onSave: (partial: Partial<Settings> & { provider?: string }) => Promise<void>;
+  onSave: (partial: Partial<Settings> & { provider?: string; api_key?: string; api_key_env?: string }) => Promise<void>;
 }
 
 type Tab = "model" | "behavior" | "plugins" | "security" | "about";
@@ -55,13 +55,21 @@ export default function SettingsModal({ open, onClose, settings, providers, onSa
   const [tab, setTab] = useState<Tab>("model");
   const [draft, setDraft] = useState<Settings>(settings);
   const [models, setModels] = useState<ModelOption[]>([]);
+  const [customModel, setCustomModel] = useState<string>("");
+  const [isCustomModel, setIsCustomModel] = useState<boolean>(false);
+  const [apiKeyInput, setApiKeyInput] = useState<string>("");
   const [plugins, setPlugins] = useState<PluginManifest[]>([]);
   const [pluginsDir, setPluginsDir] = useState<string>("");
   const [pluginsLoading, setPluginsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showFolderHelp, setShowFolderHelp] = useState(false);
 
-  useEffect(() => setDraft(settings), [settings]);
+  useEffect(() => {
+    setDraft(settings);
+    setIsCustomModel(false);
+    setCustomModel("");
+    setApiKeyInput("");
+  }, [settings, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -145,7 +153,27 @@ export default function SettingsModal({ open, onClose, settings, providers, onSa
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSave({ ...draft, provider: draft.active_provider });
+      const activeProvConfig = providers.providers[draft.active_provider];
+      let selectedModel = draft.coordinator_model;
+      if (isCustomModel && customModel.trim()) {
+        selectedModel = customModel.trim();
+        if (activeProvConfig?.model_prefix && !selectedModel.startsWith(`${activeProvConfig.model_prefix}/`)) {
+          selectedModel = `${activeProvConfig.model_prefix}/${selectedModel}`;
+        }
+      }
+
+      await onSave({
+        ...draft,
+        provider: draft.active_provider,
+        coordinator_model: selectedModel,
+        default_model: selectedModel,
+        planning_model: selectedModel,
+        code_model: selectedModel,
+        micro_fix_model: selectedModel,
+        ...(apiKeyInput.trim() && activeProvConfig?.api_key_env
+          ? { api_key: apiKeyInput.trim(), api_key_env: activeProvConfig.api_key_env }
+          : {}),
+      });
       onClose();
     } finally {
       setSaving(false);
@@ -218,31 +246,111 @@ export default function SettingsModal({ open, onClose, settings, providers, onSa
                 </select>
               </Field>
               <Field label="Model">
-                <select
-                  value={
-                    models.some((m) => m.id === draft.coordinator_model)
-                      ? draft.coordinator_model
-                      : models[0]?.id ?? draft.coordinator_model
-                  }
-                  onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      coordinator_model: e.target.value,
-                      default_model: e.target.value,
-                      planning_model: e.target.value,
-                      code_model: e.target.value,
-                      micro_fix_model: e.target.value,
-                    }))
-                  }
-                  className="input-base"
-                >
-                  {models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                {!isCustomModel ? (
+                  <div className="space-y-2">
+                    <select
+                      value={
+                        models.some((m) => m.id === draft.coordinator_model)
+                          ? draft.coordinator_model
+                          : models[0]?.id ?? draft.coordinator_model
+                      }
+                      onChange={(e) => {
+                        if (e.target.value === "__custom__") {
+                          setIsCustomModel(true);
+                        } else {
+                          setDraft((d) => ({
+                            ...d,
+                            coordinator_model: e.target.value,
+                            default_model: e.target.value,
+                            planning_model: e.target.value,
+                            code_model: e.target.value,
+                            micro_fix_model: e.target.value,
+                          }));
+                        }
+                      }}
+                      className="input-base"
+                    >
+                      {models.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
+                        </option>
+                      ))}
+                      <option value="__custom__">➕ [+ Yeni / Özel Model Ekle...]</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Örn: nvidia/nemotron-3.5-lightning-30b-a3b veya moonshotai/kimi-k3"
+                        value={customModel}
+                        onChange={(e) => setCustomModel(e.target.value)}
+                        className="input-base flex-1"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCustomModel(false);
+                          setCustomModel("");
+                        }}
+                        className="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
+                      >
+                        Listeye Dön
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-cyan-400">
+                      Girilen model adı kaydedilecek ve sağlayıcının model listesine eklenecektir.
+                    </p>
+                  </div>
+                )}
               </Field>
+
+              {providers.providers[draft.active_provider]?.requires_key && (
+                <Field
+                  label={
+                    <div className="flex items-center justify-between w-full">
+                      <span>API Anahtarı</span>
+                      <span className="text-[11px] font-normal">
+                        {(providers.providers[draft.active_provider] as any)?.has_key ? (
+                          <span className="text-emerald-400">✓ Kayıtlı Anahtar Aktif</span>
+                        ) : (
+                          <span className="text-amber-400">⚠️ Anahtar Gerekli</span>
+                        )}
+                      </span>
+                    </div>
+                  }
+                >
+                  <div className="space-y-1">
+                    <input
+                      type="password"
+                      placeholder={
+                        (providers.providers[draft.active_provider] as any)?.has_key
+                          ? "Değiştirmek için yeni anahtar girin..."
+                          : "API Anahtarını buraya yapıştırın"
+                      }
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      className="input-base"
+                    />
+                    {providers.providers[draft.active_provider]?.key_url && (
+                      <p className="text-[11px] text-gray-500">
+                        Anahtar almak için:{" "}
+                        <a
+                          href={providers.providers[draft.active_provider].key_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-cyan-400 hover:underline"
+                        >
+                          {providers.providers[draft.active_provider].key_url}
+                        </a>
+                      </p>
+                    )}
+                  </div>
+                </Field>
+              )}
+
               <Field label="Modeli Bellekte (VRAM) Hazırda Tut (Keep-Alive / Hızlı Yanıt)">
                 <div className="space-y-1.5">
                   <Toggle
@@ -256,11 +364,6 @@ export default function SettingsModal({ open, onClose, settings, providers, onSa
                   </p>
                 </div>
               </Field>
-
-              <p className="text-xs text-gray-500">
-                Bulut sağlayıcıları için API anahtarı <code className="text-cyan-400">.env.local</code> dosyasından
-                okunur — buradan girilmez.
-              </p>
             </>
           )}
 
@@ -558,7 +661,7 @@ export default function SettingsModal({ open, onClose, settings, providers, onSa
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <div>
       <label className="block text-xs font-medium text-gray-400 mb-1.5">{label}</label>

@@ -16,11 +16,11 @@ import {
   Plus,
   Mic,
   ArrowUp,
-  Folder,
 } from "lucide-react";
 import MessageBubble from "./MessageBubble";
 import PermissionPrompt, { PermissionRequest, PermissionDecision } from "./PermissionPrompt";
 import ContinuePrompt from "./ContinuePrompt";
+import SlashCommandMenu, { SLASH_COMMANDS, SlashCommand } from "./SlashCommandMenu";
 import type { UiMessage } from "@/lib/useCoordinatorChat";
 
 interface ChatPanelProps {
@@ -37,13 +37,13 @@ interface ChatPanelProps {
   onSend: (text: string) => void;
   onStop: () => void;
   onContinue?: () => void;
-  onDismissContinue?: () => void;
   onRetry?: (index?: number) => void;
   onUndo?: (index?: number) => void;
   onRespondPermission?: (decision: PermissionDecision) => void;
   onOpenTerminal?: () => void;
   onPickFolder?: () => void;
-  projectName?: string | null;
+  onNewSession?: () => void;
+  onClearMessages?: () => void;
 }
 
 export default function ChatPanel({
@@ -60,20 +60,75 @@ export default function ChatPanel({
   onSend,
   onStop,
   onContinue,
-  onDismissContinue,
   onRetry,
   onUndo,
   onRespondPermission,
   onOpenTerminal,
   onPickFolder,
-  projectName,
+  onNewSession,
+  onClearMessages,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string; label: string }>>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Slash Menü Durumu (input "/" ile başlıyorsa ve boşluk içermiyorsa)
+  const isSlashActive = input.startsWith("/") && !input.includes(" ") && !slashMenuDismissed;
+  const slashFilter = isSlashActive ? input.slice(1) : "";
+
+  const filteredSlashCommands = SLASH_COMMANDS.filter((cmd) => {
+    if (!slashFilter) return true;
+    const clean = slashFilter.toLowerCase();
+    const nameMatch = cmd.name.toLowerCase().includes(clean);
+    const aliasMatch = cmd.aliases?.some((a) => a.toLowerCase().includes(clean));
+    const descMatch = cmd.description.toLowerCase().includes(clean);
+    return nameMatch || aliasMatch || descMatch;
+  });
+
+  const handleSelectSlashCommand = (cmd: SlashCommand) => {
+    setSlashMenuDismissed(true);
+
+    if (cmd.directAction === "settings") {
+      setInput("");
+      onOpenSettings?.();
+      return;
+    }
+
+    if (cmd.directAction === "terminal") {
+      setInput("");
+      onOpenTerminal?.();
+      return;
+    }
+
+    if (cmd.directAction === "clear") {
+      setInput("");
+      if (onClearMessages) onClearMessages();
+      else onSend("/clear");
+      return;
+    }
+
+    if (cmd.directAction === "new") {
+      setInput("");
+      onNewSession?.();
+      return;
+    }
+
+    if (cmd.placeholder) {
+      setInput(cmd.placeholder);
+      setTimeout(() => textareaRef.current?.focus(), 50);
+      return;
+    }
+
+    // Doğrudan komut (örn: /run, /continue, /status, /changes, /help)
+    setInput(cmd.name);
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -109,6 +164,7 @@ export default function ChatPanel({
     if (!text || isStreaming) return;
     onSend(text);
     setInput("");
+    setSlashMenuDismissed(false);
   };
 
   return (
@@ -116,17 +172,13 @@ export default function ChatPanel({
       {/* Mesaj Akışı (Antigravity Feed) */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4">
         {messages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-center text-gray-500 gap-3 py-20 animate-in fade-in duration-300">
+          <div className="h-full flex flex-col items-center justify-center text-center text-gray-500 gap-3 py-20">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-              {projectName ? <Folder size={24} className="text-cyan-400" /> : <Sparkles size={24} />}
+              <Sparkles size={24} />
             </div>
-            <p className="text-base font-semibold text-gray-200">
-              {projectName ? `${projectName} Projesinde Yeni Oturum` : "MYF AI Agent"}
-            </p>
+            <p className="text-base font-semibold text-gray-200">MYF AI Agent</p>
             <p className="text-xs max-w-sm text-gray-400 leading-relaxed">
-              {projectName
-                ? `'${projectName}' projesinde kodlama yapmak, dosya düzenlemek veya soru sormak için bir mesaj yazın.`
-                : "Genel sohbet, soru-cevap veya bağımsız geliştirme için bir mesaj yazın. Canlı dosya düzenlemeleri ve terminal çıktıları anında ekrana yansır."}
+              Bir proje oluşturun, hata düzeltin veya komut çalıştırın. Canlı dosya düzenlemeleri ve terminal çıktıları anında ekrana yansır.
             </p>
           </div>
         )}
@@ -140,12 +192,9 @@ export default function ChatPanel({
             statusNote={m.statusNote}
             editedFiles={m.editedFiles}
             sessionId={sessionId}
-            projectName={projectName}
-            isLatest={i === messages.length - 1}
             isStreaming={isStreaming && i === messages.length - 1 && m.role === "assistant"}
             onRetry={m.role === "assistant" && onRetry ? () => onRetry(i) : undefined}
             onUndo={onUndo ? () => onUndo(i) : undefined}
-            onAction={onSend}
           />
         ))}
         <div ref={bottomRef} />
@@ -188,33 +237,62 @@ export default function ChatPanel({
               visible={continuePrompt.visible}
               message={continuePrompt.message}
               onContinue={onContinue}
-              onDismiss={onDismissContinue}
             />
           )}
 
-          {/* Eğer bu oturuma bağlı bir proje yoksa belirgin ve şık bir Proje Klasörü Seç / Bağla çubuğu */}
-          {!projectName && onPickFolder && (
-            <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-amber-950/30 border border-amber-800/40 text-xs text-amber-300/90 mb-1 animate-in fade-in">
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                <span>Bu sohbet bağımsızdır (proje klasörü seçilmedi).</span>
-              </div>
-              <button
-                type="button"
-                onClick={onPickFolder}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-900/60 hover:bg-amber-800 text-amber-200 font-medium transition-colors border border-amber-700/50"
-              >
-                <span>📁 Proje Klasörü Seç</span>
-              </button>
-            </div>
-          )}
-
           {/* Antigravity Tarzı Yuvarlatılmış Girdi Kartı */}
-          <div className="rounded-2xl bg-[#151720] border border-gray-800 focus-within:border-gray-700 p-3 shadow-2xl flex flex-col gap-2">
+          <div className="relative rounded-2xl bg-[#151720] border border-gray-800 focus-within:border-gray-700 p-3 shadow-2xl flex flex-col gap-2">
+            {/* Slash Komut Açılır Menüsü */}
+            {isSlashActive && (
+              <SlashCommandMenu
+                filter={slashFilter}
+                selectedIndex={slashSelectedIndex}
+                onSelect={handleSelectSlashCommand}
+                onClose={() => setSlashMenuDismissed(true)}
+              />
+            )}
+
             <textarea
+              ref={textareaRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setInput(val);
+                if (!val.startsWith("/")) {
+                  setSlashMenuDismissed(false);
+                  setSlashSelectedIndex(0);
+                } else if (slashMenuDismissed && val === "/") {
+                  setSlashMenuDismissed(false);
+                  setSlashSelectedIndex(0);
+                }
+              }}
               onKeyDown={(e) => {
+                if (isSlashActive && filteredSlashCommands.length > 0) {
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setSlashSelectedIndex((prev) => (prev + 1) % filteredSlashCommands.length);
+                    return;
+                  }
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setSlashSelectedIndex((prev) => (prev - 1 + filteredSlashCommands.length) % filteredSlashCommands.length);
+                    return;
+                  }
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    const selectedCmd = filteredSlashCommands[slashSelectedIndex] || filteredSlashCommands[0];
+                    if (selectedCmd) {
+                      handleSelectSlashCommand(selectedCmd);
+                    }
+                    return;
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setSlashMenuDismissed(true);
+                    return;
+                  }
+                }
+
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   handleSend();

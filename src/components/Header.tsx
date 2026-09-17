@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Brain, Settings, Circle, Terminal, Database, Gauge } from "lucide-react";
+import { Brain, Settings, Circle, Terminal } from "lucide-react";
 
 interface HeaderProps {
   providerLabel: string;
@@ -12,9 +12,6 @@ interface HeaderProps {
   onToggleTerminal?: () => void;
   isTerminalOpen?: boolean;
   taskCount?: number;
-  onOpenLogs?: () => void;
-  unresolvedErrorCount?: number;
-  contextUsage?: { usedTokens: number; maxTokens: number; percent: number } | null;
 }
 
 export default function Header({
@@ -26,9 +23,6 @@ export default function Header({
   onToggleTerminal,
   isTerminalOpen,
   taskCount = 0,
-  onOpenLogs,
-  unresolvedErrorCount = 0,
-  contextUsage,
 }: HeaderProps) {
   const [port, setPort] = useState<string>("3111");
 
@@ -56,16 +50,12 @@ export default function Header({
         {/* Antigravity Tarzı Breadcrumb: Proje / Oturum */}
         {(projectName || sessionTitle) && (
           <div className="hidden md:flex items-center gap-2 pl-4 border-l border-gray-800 text-xs">
-            {projectName ? (
+            {projectName && (
               <span className="font-semibold text-gray-300 bg-gray-900 px-2 py-0.5 rounded border border-gray-800">
                 📁 {projectName}
               </span>
-            ) : (
-              <span className="text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800/60 flex items-center gap-1">
-                💬 Genel Sohbet
-              </span>
             )}
-            {sessionTitle && <span className="text-gray-600">/</span>}
+            {projectName && sessionTitle && <span className="text-gray-600">/</span>}
             {sessionTitle && (
               <span className="text-gray-400 font-medium truncate max-w-xs">
                 {sessionTitle}
@@ -77,25 +67,6 @@ export default function Header({
 
 
       <div className="flex items-center space-x-3 text-xs">
-        {onOpenLogs && (
-          <button
-            onClick={onOpenLogs}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800 hover:text-cyan-300 transition-all shadow-sm"
-            title="Pipeline & Ajan Süreç Loglarını İncele (.myfcli/logs.db)"
-          >
-            <Database
-              size={14}
-              className={unresolvedErrorCount > 0 ? "text-red-400" : "text-cyan-400"}
-            />
-            <span>Pipeline Logs</span>
-            {unresolvedErrorCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-red-600 text-white text-[10px] font-bold animate-pulse">
-                {unresolvedErrorCount}
-              </span>
-            )}
-          </button>
-        )}
-
         {onToggleTerminal && (
           <button
             onClick={onToggleTerminal}
@@ -114,23 +85,6 @@ export default function Header({
               </span>
             )}
           </button>
-        )}
-
-        {/* Canlı Context Penceresi / Token Bütçesi Rozeti */}
-        {contextUsage && (
-          <div
-            className={`hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-mono transition-all ${
-              contextUsage.percent >= 80
-                ? "bg-red-950/70 border-red-800/80 text-red-300 animate-pulse"
-                : contextUsage.percent >= 60
-                ? "bg-amber-950/70 border-amber-800/80 text-amber-300"
-                : "bg-gray-900 border-gray-800 text-gray-400"
-            }`}
-            title={`Context Penceresi: ${contextUsage.usedTokens} / ${contextUsage.maxTokens} token (%${contextUsage.percent})`}
-          >
-            <Gauge size={13} className={contextUsage.percent >= 80 ? "text-red-400" : "text-cyan-400"} />
-            <span>Ctx: %{contextUsage.percent}</span>
-          </div>
         )}
 
         <div className="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-gray-900 border border-gray-800 text-gray-300">

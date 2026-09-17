@@ -9,18 +9,10 @@ import { listProjects, addProject, deleteProject } from "@/lib/store";
 import { promises as fs } from "fs";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 export async function GET() {
   const projects = await listProjects();
-  return NextResponse.json(
-    { projects },
-    {
-      headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-      },
-    }
-  );
+  return NextResponse.json({ projects });
 }
 
 export async function POST(req: NextRequest) {
@@ -48,7 +40,7 @@ export async function POST(req: NextRequest) {
   }
 
   const project = await addProject(name, dirPath);
-  return NextResponse.json({ ok: true, project }, { status: 201 });
+  return NextResponse.json({ ok: true, project });
 }
 
 export async function DELETE(req: NextRequest) {

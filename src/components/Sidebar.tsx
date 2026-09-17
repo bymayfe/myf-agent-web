@@ -302,9 +302,6 @@ export default function Sidebar({
     }
   }
 
-  const activeSession = sessions.find((s) => s.session_id === activeId);
-  const currentProjectDir = activeSession?.project_dir;
-
   return (
     <>
       <aside className="w-64 shrink-0 glass border-r border-gray-800 flex flex-col overflow-hidden select-none bg-[#0e1017]">
@@ -312,25 +309,11 @@ export default function Sidebar({
         {/* ── Üst Genel Yeni Oturum Butonu (Always New Independent Conversation) ── */}
         <div className="p-2.5 border-b border-gray-800/60">
           <button
-            onClick={() => {
-              if (currentProjectDir) {
-                onNew(currentProjectDir);
-              } else if (projects.length === 1 && projects[0].exists) {
-                onNew(projects[0].path);
-              } else {
-                onNew(undefined);
-              }
-            }}
+            onClick={() => onNew(undefined)}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-900/90 hover:bg-gray-800 border border-gray-700/60 hover:border-cyan-700/60 text-gray-200 hover:text-white text-xs font-medium transition-all shadow-sm group"
           >
             <Plus size={14} className="text-cyan-400 group-hover:scale-110 transition-transform" />
-            <span className="flex-1 text-left">
-              {currentProjectDir
-                ? `Yeni Oturum (${currentProjectDir.split("/").filter(Boolean).pop()})`
-                : projects.length === 1
-                ? `Yeni Oturum (${projects[0].name})`
-                : "New Conversation"}
-            </span>
+            <span className="flex-1 text-left">New Conversation</span>
           </button>
         </div>
 

@@ -121,7 +121,10 @@ export function useCoordinatorChat(
     }
     const currentId = currentSessionIdRef.current;
     if (currentId && sessionStore.current.has(currentId)) {
-      sessionStore.current.get(currentId)!.isStreaming = false;
+      const st = sessionStore.current.get(currentId)!;
+      st.isStreaming = false;
+      st.continuePrompt = null;
+      st.permissionRequest = null;
     }
     setIsStreaming(false);
     setIsPipelineRunning(false);
@@ -218,8 +221,19 @@ export function useCoordinatorChat(
                 const next = [...prev];
                 const last = next[next.length - 1];
                 if (last && last.role === "assistant") {
+                  let updated = last.content;
+                  if (evt.status === "start") {
+                    updated += `\n\n### ${evt.stageIcon} Aşama ${evt.stage}: ${evt.stageName}\n*${evt.message}*`;
+                  } else if (evt.status === "file_written" && evt.file) {
+                    updated += `\n- 📄 **Dosya oluşturuldu:** \`${evt.file}\``;
+                  } else if (evt.status === "done") {
+                    updated += `\n\n> ✅ **${evt.stageName} aşaması tamamlandı.**`;
+                  } else if (evt.status === "error") {
+                    updated += `\n\n> ⚠️ **Hata:** ${evt.message}`;
+                  }
                   next[next.length - 1] = {
                     ...last,
+                    content: updated,
                     statusNote: `${evt.stageIcon} [${evt.stageName}] ${evt.message}`,
                   };
                 }
@@ -280,6 +294,8 @@ export function useCoordinatorChat(
         const st = getOrCreateSessionState(targetSessionId, newMessages);
         st.messages = newMessages;
         st.isStreaming = true;
+        st.continuePrompt = null;
+        st.permissionRequest = null;
         syncActiveView(st);
       } else {
         setMessages(newMessages);
@@ -371,7 +387,30 @@ export function useCoordinatorChat(
                 options?.onTitleUpdate?.(data.sessionId, data.title);
               } else if (frame.event === "pipeline_start") {
                 const pData = frame.data as { requirement?: string } | string;
-                const req = typeof pData === "object" && pData?.requirement ? pData.requirement : prompt;
+                const isGeneric = (t?: string) => {
+                  if (!t) return true;
+                  const s = t.trim().toLowerCase();
+                  return (
+                    s.startsWith("/") ||
+                    s === "devam" ||
+                    s === "devam et" ||
+                    s === "continue" ||
+                    s === "başlat" ||
+                    s === "start" ||
+                    s === "run" ||
+                    s === "true" ||
+                    s.includes("sonraki adımları tamamla") ||
+                    s.includes("kaldığın yerden devam et")
+                  );
+                };
+
+                let req = typeof pData === "string" ? pData : pData?.requirement;
+                if (!req || isGeneric(req)) {
+                  const lastUser = [...baseHistory].reverse().find(
+                    (m) => m.role === "user" && !isGeneric(m.content)
+                  );
+                  req = lastUser?.content || prompt;
+                }
                 setPipelineRequested(true);
                 setPipelineRequirement(req);
                 startPipelineExecution(req);

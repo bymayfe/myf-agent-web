@@ -12,21 +12,12 @@ interface ThinkBlockProps {
 }
 
 export default function ThinkBlock({ content, isStreaming }: ThinkBlockProps) {
-  const [userToggled, setUserToggled] = useState<boolean | null>(null);
+  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [durationSec, setDurationSec] = useState<number | null>(null);
 
   const startRef = useRef<number>(Date.now());
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Model aktif düşünürken (isStreaming) varsayılan olarak açık göster;
-  // düşünme bitince otomatik olarak şık bir rozet şeklinde toparla (kullanıcı elle değiştirmediyse)
-  const open = userToggled !== null ? userToggled : Boolean(isStreaming);
-
-  const toggleOpen = () => {
-    setUserToggled((prev) => (prev !== null ? !prev : !Boolean(isStreaming)));
-  };
 
   useEffect(() => {
     if (isStreaming) {
@@ -48,21 +39,14 @@ export default function ThinkBlock({ content, isStreaming }: ThinkBlockProps) {
     };
   }, [isStreaming]);
 
-  // Canlı düşünce akarken en alt satıra otomatik kaydır
-  useEffect(() => {
-    if (isStreaming && open && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [content, isStreaming, open]);
-
   if (!content || !content.trim()) return null;
 
   const lines = content.trim().split("\n");
   const lineCount = lines.length;
   const lastLine = lines[lines.length - 1]?.trim() || "";
 
-  const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCopy = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -73,14 +57,14 @@ export default function ThinkBlock({ content, isStreaming }: ThinkBlockProps) {
       <div
         role="button"
         tabIndex={0}
-        onClick={toggleOpen}
+        onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            toggleOpen();
+            setOpen((v) => !v);
           }
         }}
-        className="w-full flex items-center justify-between px-3.5 py-2 text-purple-300/90 hover:bg-purple-900/20 transition-colors text-left font-mono cursor-pointer"
+        className="w-full flex items-center justify-between px-3.5 py-2 text-purple-300/90 hover:bg-purple-900/20 transition-colors text-left font-mono cursor-pointer select-none"
       >
         <div className="flex items-center gap-2 truncate">
           <Brain
@@ -116,10 +100,7 @@ export default function ThinkBlock({ content, isStreaming }: ThinkBlockProps) {
       </div>
 
       {open && (
-        <div
-          ref={scrollRef}
-          className="px-3.5 pb-3 pt-2 text-[11px] text-purple-100/80 whitespace-pre-wrap font-mono leading-relaxed border-t border-purple-900/30 bg-[#070512] max-h-80 overflow-y-auto select-text"
-        >
+        <div className="px-3.5 pb-3 pt-2 text-[11px] text-purple-100/80 whitespace-pre-wrap font-mono leading-relaxed border-t border-purple-900/30 bg-[#070512] max-h-80 overflow-y-auto select-text">
           {content.trim()}
         </div>
       )}

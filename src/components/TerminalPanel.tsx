@@ -17,13 +17,12 @@ import {
   AlertCircle,
   Loader2,
   Play,
-  Square,
 } from "lucide-react";
 
 export interface TerminalTask {
   id: string;
   command: string;
-  status: "running" | "completed" | "error" | "killed";
+  status: "running" | "completed" | "error";
   output: string;
   startedAt: string;
   cwd?: string;
@@ -34,7 +33,6 @@ interface TerminalPanelProps {
   activeTaskId?: string | null;
   onSelectTask?: (id: string) => void;
   onClose: () => void;
-  onKillTask?: (id: string) => void;
 }
 
 export default function TerminalPanel({
@@ -42,12 +40,10 @@ export default function TerminalPanel({
   activeTaskId,
   onSelectTask,
   onClose,
-  onKillTask,
 }: TerminalPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
-  const [killing, setKilling] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Aktif görevi seç
@@ -130,8 +126,6 @@ export default function TerminalPanel({
                   <Loader2 size={11} className="animate-spin text-amber-400 shrink-0" />
                 ) : task.status === "error" ? (
                   <AlertCircle size={11} className="text-red-400 shrink-0" />
-                ) : task.status === "killed" ? (
-                  <Square size={11} className="text-gray-400 shrink-0" />
                 ) : (
                   <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
                 )}
@@ -175,33 +169,9 @@ export default function TerminalPanel({
           </div>
           <div className="flex items-center gap-2 shrink-0 ml-2">
             {activeTask.status === "running" ? (
-              <>
-                <span className="px-2 py-0.5 rounded-full bg-amber-950/80 border border-amber-700/60 text-amber-300 text-[10px] flex items-center gap-1">
-                  <Loader2 size={10} className="animate-spin" />
-                  Çalışıyor
-                </span>
-                {onKillTask && (
-                  <button
-                    disabled={killing}
-                    onClick={async () => {
-                      setKilling(true);
-                      try {
-                        await onKillTask(activeTask.id);
-                      } finally {
-                        setKilling(false);
-                      }
-                    }}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-950/60 border border-red-800/60 text-red-300 text-[10px] hover:bg-red-900/60 transition-colors disabled:opacity-50"
-                    title="Görevi sonlandır"
-                  >
-                    <Square size={9} />
-                    {killing ? "Sonlandırılıyor..." : "Sonlandır"}
-                  </button>
-                )}
-              </>
-            ) : activeTask.status === "killed" ? (
-              <span className="px-2 py-0.5 rounded-full bg-gray-800 border border-gray-700 text-gray-300 text-[10px]">
-                Sonlandırıldı
+              <span className="px-2 py-0.5 rounded-full bg-amber-950/80 border border-amber-700/60 text-amber-300 text-[10px] flex items-center gap-1">
+                <Loader2 size={10} className="animate-spin" />
+                Çalışıyor
               </span>
             ) : activeTask.status === "error" ? (
               <span className="px-2 py-0.5 rounded-full bg-red-950/80 border border-red-700/60 text-red-300 text-[10px]">

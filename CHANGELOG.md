@@ -4,6 +4,22 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.3.0] - 2026-09-17
+
+### 📦 Web Arama Registry Doğrulama & Squat Koruması
+- **Resmi Paket ve Sürüm Düzeltmesi (0.0.3 Fix):**
+  - NPM kayıt defterinde terk edilmiş `nextjs: 0.0.3` gibi paketlerin `web_search` sonuçlarında gerçek Next.js (16.3.5) yerine geçmesi engellendi.
+  - `SQUAT_URL_REGEX` ile kukla paket URL'leri DuckDuckGo HTML ve Lite sonuçlarından temizlendi.
+  - `searchPackageRegistry` fonksiyonu ile `nextjs`, `reactjs`, `vuejs`, `tailwindcss`, `nestjs` vb. aliaslar çözülür ve PyPI (`fastapi`, `pydantic` vb.) desteği sağlandı.
+
+### 🛡️ Ajan Döngüsü, Port İzolasyonu & Halüsinasyon Önleme
+- **14 Adımlı Ajan Kapasitesi:** `MAX_TOOL_ITERATIONS` sınırı 8'den **14'e** çıkarıldı; ajanın dosya okuma ve test aşamalarında erken durması önlendi.
+- **Tarafsız Sentez ve Halüsinasyon Yasağı:** Limit dolduğunda modeli zorla *"hata ara ve açıkla"* moduna sokan dil kaldırıldı; derleme/test başarılıysa projenin çalıştığını açıkça bildirme ve hayali hata uydurmama kuralı getirildi.
+- **Bağlam ve Port İzolasyonu:** Web UI'ın 3111 portunun `child_process.spawn` ile alt projelere sızması (`delete childEnv.PORT`) engellendi; `hayditest` gibi projelerin varsayılan 3000 portunda temiz açılması sağlandı.
+- **Dev Server Yaşam Döngüsü:** `terminalPlugin.ts` dev server doğrulandığında açık ve net mesaj dönecek şekilde güncellendi; sistem promptuna `timeout` gerekmediği bilgisi eklendi.
+- **Akıllı Test Stratejisi:** Projedeki tüm dosyaları tek tek okumak yerine doğrudan derleme/test (`npm run build`) önceliği sistem promptuna kural olarak yerleştirildi.
+- **Dengeli Ayraç JSON Ayrıştırıcı:** `extractBalancedJsonObjects` ile iç içe JSON araç çağrıları ve parametreler kırpılmadan tam olarak ayıklanır.
+
 ## [1.2.0] - 2026-09-17
 
 ### ⏱️ Evrensel Cold-Start & Bulut Gecikme İzleyicisi

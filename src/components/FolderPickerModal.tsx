@@ -66,7 +66,7 @@ export default function FolderPickerModal({
       setData(json);
       setCurrentPath(json.currentPath);
       // Varsayılan proje adı olarak klasörün adını belirle
-      const folderBaseName = json.currentPath.split("/").filter(Boolean).pop() || "Proje";
+      const folderBaseName = json.currentPath.split(/[\\/]/).filter(Boolean).pop() || "Proje";
       setProjectName(folderBaseName);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Klasör okunamadı");
@@ -81,7 +81,7 @@ export default function FolderPickerModal({
     }
   }, [open, loadDirectory]);
 
-  // Native OS klasör seçici dialog (zenity/kdialog)
+  // Native OS klasör seçici dialog (Windows: PowerShell/Tkinter, Linux: Zenity/Kdialog, macOS: osascript)
   const handleOpenNativeDialog = async () => {
     setNativeLoading(true);
     setError("");
@@ -106,7 +106,7 @@ export default function FolderPickerModal({
     setSubmitting(true);
     setError("");
     try {
-      await onSelectFolder(currentPath, projectName.trim() || currentPath.split("/").pop() || "Proje");
+      await onSelectFolder(currentPath, projectName.trim() || currentPath.split(/[\\/]/).filter(Boolean).pop() || "Proje");
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Proje eklenemedi");
@@ -117,8 +117,10 @@ export default function FolderPickerModal({
 
   if (!open) return null;
 
-  // Breadcrumb parçaları
-  const pathParts = currentPath.split("/").filter(Boolean);
+  // Breadcrumb parçaları ve platform kontrolü
+  const isWin = currentPath.includes("\\") || /^[a-zA-Z]:/.test(currentPath);
+  const pathParts = currentPath.split(/[\\/]/).filter(Boolean);
+  const rootDrive = isWin && pathParts.length > 0 && /^[a-zA-Z]:$/.test(pathParts[0]) ? pathParts[0] + "\\" : "/";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-150">
@@ -187,13 +189,16 @@ export default function FolderPickerModal({
 
           <div className="flex-1 flex items-center gap-1 overflow-x-auto py-0.5 text-xs text-gray-400 font-mono no-scrollbar">
             <button
-              onClick={() => loadDirectory("/")}
+              onClick={() => loadDirectory(rootDrive)}
               className="hover:text-cyan-400 flex items-center gap-1 shrink-0 px-1 py-0.5 rounded hover:bg-gray-800"
             >
-              <HardDrive size={12} /> /
+              <HardDrive size={12} /> {rootDrive}
             </button>
             {pathParts.map((part, idx) => {
-              const fullSubPath = "/" + pathParts.slice(0, idx + 1).join("/");
+              if (isWin && idx === 0 && /^[a-zA-Z]:$/.test(part)) return null;
+              const fullSubPath = isWin
+                ? pathParts.slice(0, idx + 1).join("\\")
+                : "/" + pathParts.slice(0, idx + 1).join("/");
               const isLast = idx === pathParts.length - 1;
               return (
                 <div key={fullSubPath} className="flex items-center gap-1 shrink-0">
