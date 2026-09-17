@@ -4,6 +4,27 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.2.0] - 2026-09-17
+
+### ⏱️ Evrensel Cold-Start & Bulut Gecikme İzleyicisi
+- **Canlı Durum ve Süre Sayacı:**
+  - `route.ts` üzerinde modelden ilk token gelene kadar geçen süreyi takip eden sayaç eklendi (`⏳ Sağlayıcıya bağlanıldı (6s)...`, `🚀 Model uyandırılıyor / Cold-Start bekleniyor (14s)...`).
+  - `MessageBubble.tsx` içinde ilk token gelene kadar statik "Working" yerine canlı sayaçlı rozet gösterimi sağlandı. İlk token geldiğinde rozet otomatik olarak temizlenir.
+
+### 🛡️ Katı Bulut API & Akıl Yürütme (Reasoning) Uyumluluğu
+- **Kimi-K3 & OpenAI Uyumluluğu:**
+  - `llmClient.ts` içindeki sabit `repeat_penalty`, `presence_penalty` ve `frequency_penalty` parametreleri kaldırıldı.
+  - Kimi-K3 ve akıl yürütme modellerinin `presence_penalty is immutable and must be 0` hatasıyla 400 Bad Request dönmesi engellendi.
+  - `top_k` parametresi katı REST API'lerin hata vermemesi için opsiyonel hale getirildi.
+
+### ⚡ Canlı Akış (Streaming) ve Oturum Senkronizasyon Onarımı
+- **React State Referans Senkronizasyonu (`useCoordinatorChat.ts`):**
+  - Akış sırasında doğrudan dizi ve nesne mutasyonu nedeniyle React'in re-render yapmaması ve ekranın "Working"de takılı kalması sorunu, mesaj dizisi ve nesneleri klonlanarak (`[...state.messages.map(m => ({ ...m }))]`) tamamen çözüldü.
+  - `session_created` anında aktif oturum referansı hemen güncellenir hale getirildi.
+- **Temiz Araç Çağrısı Fallback:**
+  - `ToolCallBlock.tsx` içindeki kırılgan regex blokları kaldırılarak temiz fallback sağlandı.
+  - `chat/route.ts` içindeki inline HTML temizleme zinciri bağımsız `stripHtml()` fonksiyonuna taşındı.
+
 ## [1.1.0] - 2026-09-04
 
 ### ⚡ Canlı Akış, Düşünce Motoru ve Otonom Komut İyileştirmeleri

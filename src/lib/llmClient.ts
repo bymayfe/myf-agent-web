@@ -11,7 +11,6 @@ interface OllamaChatChunk {
   message?: { content?: string; thinking?: string };
   thinking?: string;
   done?: boolean;
-  done_reason?: string;
 }
 
 interface OpenAiCompatChunk {
@@ -21,7 +20,6 @@ interface OpenAiCompatChunk {
       reasoning_content?: string;
       thinking?: string;
     };
-    finish_reason?: string | null;
   }>;
 }
 
@@ -36,8 +34,8 @@ export interface CallLlmOptions {
   topK?: number;
   thinkMode?: boolean;
   warmup?: boolean;
+  contextWindow?: number;
   onToken?: OnToken;
-  onFinish?: (reason: "stop" | "length") => void;
   signal?: AbortSignal;
 }
 
@@ -213,8 +211,8 @@ async function callOllamaChat(opts: CallLlmOptions): Promise<string> {
   const modelName = stripProviderPrefix(opts.model);
   const endpoint = `${opts.apiBase.replace(/\/$/, "")}/api/chat`;
 
-  // Ollama için geniş context window (32k) ve yüksek çıktı limiti (8k)
-  const numCtx = 32768;
+  // Context window: Model için belirlenen pencere veya VRAM emniyetli dinamik değer
+  const numCtx = opts.contextWindow ?? (modelName.includes("27b") ? 4096 : 8192);
   const numPredict = opts.maxTokens ?? 8192;
   // Modeli bellekte sıcak tutma (keep_alive: -1 süresiz VRAM'de tutar)
   const keepAlive = opts.warmup ? -1 : "5m";
@@ -234,7 +232,6 @@ async function callOllamaChat(opts: CallLlmOptions): Promise<string> {
         top_k: opts.topK ?? 40,
         num_predict: numPredict,
         num_ctx: numCtx,
-        repeat_penalty: 1.15,
       },
     }),
   }).catch((err) => {
@@ -255,7 +252,7 @@ async function callOllamaChat(opts: CallLlmOptions): Promise<string> {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  const thinkParser = createStreamThinkingParser(opts.onToken);
+  let fullContent = "";
 
   while (true) {
     const { done, value } = await reader.read();
@@ -283,20 +280,17 @@ async function callOllamaChat(opts: CallLlmOptions): Promise<string> {
       }
 
       if (contentToken) {
-        thinkParser.feed(contentToken);
+        fullContent += contentToken;
+        opts.onToken?.(contentToken, "content");
       }
 
       if (chunk.done) {
-        thinkParser.flush();
-        const reason = chunk.done_reason === "length" ? "length" : "stop";
-        opts.onFinish?.(reason);
-        return thinkParser.fullContent.trim();
+        return fullContent.trim();
       }
     }
   }
 
-  thinkParser.flush();
-  return thinkParser.fullContent.trim();
+  return fullContent.trim();
 }
 
 function detectRepetition(text: string): boolean {
@@ -338,10 +332,7 @@ async function callOpenAiCompatChat(opts: CallLlmOptions): Promise<string> {
       temperature: opts.temperature ?? 0.2,
       max_tokens: opts.maxTokens ?? 8192,
       top_p: opts.topP ?? 0.95,
-      ...(opts.topK !== undefined ? { top_k: opts.topK } : { top_k: 40 }),
-      frequency_penalty: 0.15,
-      presence_penalty: 0.1,
-      repeat_penalty: 1.15,
+      ...(opts.topK !== undefined ? { top_k: opts.topK } : {}),
       stream: true,
       // Qwen3 / DeepSeek ailesi için thinking modu (llama.cpp + lm_studio + openai compat)
       ...(opts.thinkMode
@@ -398,11 +389,7 @@ async function callOpenAiCompatChat(opts: CallLlmOptions): Promise<string> {
       } catch {
         continue;
       }
-      const choice = json.choices?.[0];
-      if (choice?.finish_reason) {
-        opts.onFinish?.(choice.finish_reason === "length" ? "length" : "stop");
-      }
-      const delta = choice?.delta;
+      const delta = json.choices?.[0]?.delta;
       if (!delta) continue;
 
       // ── Yol 1: Ayrı reasoning alanları (DeepSeek, NVIDIA NIM, modern llama-server) ──

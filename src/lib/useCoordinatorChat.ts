@@ -59,7 +59,6 @@ interface SessionRuntimeState {
   activityGroups: ActivityGroup[];
   continuePrompt: { visible: boolean; message: string } | null;
   permissionRequest: PermissionRequest | null;
-  contextStatus?: { usedTokens: number; maxTokens: number; percent: number } | null;
 }
 
 export function useCoordinatorChat(
@@ -74,7 +73,6 @@ export function useCoordinatorChat(
   const [isPipelineRunning, setIsPipelineRunning] = useState(false);
   const [continuePrompt, setContinuePrompt] = useState<{ visible: boolean; message: string } | null>(null);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null);
-  const [contextStatus, setContextStatus] = useState<{ usedTokens: number; maxTokens: number; percent: number } | null>(null);
   const [activityGroups, setActivityGroups] = useState<ActivityGroup[]>([]);
   const [terminalTasks, setTerminalTasks] = useState<TerminalTask[]>([]);
   const [activeTerminalTaskId, setActiveTerminalTaskId] = useState<string | null>(null);
@@ -99,7 +97,6 @@ export function useCoordinatorChat(
           activityGroups: [],
           continuePrompt: null,
           permissionRequest: null,
-          contextStatus: null,
         });
       }
       return sessionStore.current.get(id)!;
@@ -108,14 +105,13 @@ export function useCoordinatorChat(
   );
 
   const syncActiveView = useCallback((state: SessionRuntimeState) => {
-    setMessages([...state.messages]);
+    setMessages([...state.messages.map((m) => ({ ...m }))]);
     setIsStreaming(state.isStreaming);
     setTerminalTasks([...state.terminalTasks]);
     setActiveTerminalTaskId(state.activeTerminalTaskId);
     setActivityGroups([...state.activityGroups]);
     setContinuePrompt(state.continuePrompt ? { ...state.continuePrompt } : null);
     setPermissionRequest(state.permissionRequest ? { ...state.permissionRequest } : null);
-    setContextStatus(state.contextStatus ?? null);
   }, []);
 
   const stop = useCallback(() => {
@@ -144,14 +140,13 @@ export function useCoordinatorChat(
           return;
         }
         const state: SessionRuntimeState = {
-          messages: history.length === 0 ? [] : (existing?.messages && existing.messages.length >= history.length ? existing.messages : history),
+          messages: existing?.messages && existing.messages.length >= history.length ? existing.messages : history,
           isStreaming: existing?.isStreaming || false,
           terminalTasks: existing?.terminalTasks || [],
           activeTerminalTaskId: existing?.activeTerminalTaskId || null,
           activityGroups: existing?.activityGroups || [],
           continuePrompt: null,
           permissionRequest: null,
-          contextStatus: null,
         };
         sessionStore.current.set(activeId, state);
         syncActiveView(state);
@@ -164,26 +159,10 @@ export function useCoordinatorChat(
         setActivityGroups([]);
         setContinuePrompt(null);
         setPermissionRequest(null);
-        setContextStatus(null);
       }
     },
     [syncActiveView]
   );
-
-  const deleteSessionState = useCallback((id: string) => {
-    sessionStore.current.delete(id);
-    if (currentSessionIdRef.current === id || !currentSessionIdRef.current) {
-      currentSessionIdRef.current = null;
-      setMessages([]);
-      setIsStreaming(false);
-      setTerminalTasks([]);
-      setActiveTerminalTaskId(null);
-      setActivityGroups([]);
-      setContinuePrompt(null);
-      setPermissionRequest(null);
-      setContextStatus(null);
-    }
-  }, []);
 
   const startPipelineExecution = useCallback(
     async (requirement: string) => {
@@ -287,7 +266,7 @@ export function useCoordinatorChat(
   );
 
   const sendMessage = useCallback(
-    async (prompt: string, overrideHistory?: UiMessage[], projectDir?: string) => {
+    async (prompt: string, overrideHistory?: UiMessage[]) => {
       let targetSessionId = currentSessionIdRef.current;
 
       const baseHistory = overrideHistory ?? messages;
@@ -301,8 +280,6 @@ export function useCoordinatorChat(
         const st = getOrCreateSessionState(targetSessionId, newMessages);
         st.messages = newMessages;
         st.isStreaming = true;
-        st.continuePrompt = null;
-        st.permissionRequest = null;
         syncActiveView(st);
       } else {
         setMessages(newMessages);
@@ -320,11 +297,7 @@ export function useCoordinatorChat(
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt,
-            sessionId: targetSessionId || undefined,
-            projectDir: projectDir || undefined,
-          }),
+          body: JSON.stringify({ prompt, sessionId: targetSessionId || undefined }),
           signal: controller.signal,
         });
 
@@ -351,10 +324,8 @@ export function useCoordinatorChat(
               const st = getOrCreateSessionState(targetSessionId, newMessages);
               st.isStreaming = true;
 
-              if (currentSessionIdRef.current === null || currentSessionIdRef.current === targetSessionId) {
-                currentSessionIdRef.current = targetSessionId;
-                syncActiveView(st);
-              }
+              currentSessionIdRef.current = targetSessionId;
+              syncActiveView(st);
               options?.onSessionCreated?.(data.sessionId);
               options?.onTitleUpdate?.(data.sessionId, data.title);
             }
@@ -362,47 +333,32 @@ export function useCoordinatorChat(
             const st = targetSessionId ? getOrCreateSessionState(targetSessionId) : null;
 
             if (st) {
-              const lastIdx = st.messages.length - 1;
-              const last = st.messages[lastIdx];
-
               if (frame.event === "content") {
+                const last = st.messages[st.messages.length - 1];
                 if (last && last.role === "assistant") {
-                  st.messages[lastIdx] = {
-                    ...last,
-                    content: last.content + (frame.data as string),
-                    statusNote: undefined,
-                  };
+                  last.content += (frame.data as string);
+                  last.statusNote = undefined;
                 }
               } else if (frame.event === "thinking") {
+                const last = st.messages[st.messages.length - 1];
                 if (last && last.role === "assistant") {
-                  st.messages[lastIdx] = {
-                    ...last,
-                    thinking: (last.thinking ?? "") + (frame.data as string),
-                  };
+                  last.thinking = (last.thinking ?? "") + (frame.data as string);
                 }
               } else if (frame.event === "status") {
+                const last = st.messages[st.messages.length - 1];
                 if (last && last.role === "assistant") {
-                  st.messages[lastIdx] = {
-                    ...last,
-                    statusNote: frame.data as string,
-                  };
+                  last.statusNote = (frame.data as string) || undefined;
                 }
               } else if (frame.event === "file_changes") {
+                const last = st.messages[st.messages.length - 1];
                 if (last && last.role === "assistant") {
-                  st.messages[lastIdx] = {
-                    ...last,
-                    editedFiles: frame.data as EditedFile[],
-                  };
+                  last.editedFiles = frame.data as EditedFile[];
                 }
               } else if (frame.event === "continue_prompt") {
                 const data = frame.data as { needed: boolean; message: string };
                 if (data.needed) {
                   st.continuePrompt = { visible: true, message: data.message };
                 }
-              } else if (frame.event === "context_status") {
-                const data = frame.data as { usedTokens: number; maxTokens: number; percent: number };
-                st.contextStatus = data;
-                setContextStatus(data);
               } else if (frame.event === "permission_request") {
                 st.permissionRequest = frame.data as PermissionRequest;
               } else if (frame.event === "activity") {
@@ -444,8 +400,8 @@ export function useCoordinatorChat(
 
             // Sadece kullanıcı şu an bu oturumu görüntülüyorsa UI'ı canlı güncelle
             const isViewingThisSession =
-              currentSessionIdRef.current === targetSessionId ||
-              (!currentSessionIdRef.current && !targetSessionId);
+              !currentSessionIdRef.current ||
+              currentSessionIdRef.current === targetSessionId;
 
             if (isViewingThisSession && st) {
               syncActiveView(st);
@@ -481,20 +437,8 @@ export function useCoordinatorChat(
 
   const handleContinue = useCallback(() => {
     setContinuePrompt(null);
-    const activeId = currentSessionIdRef.current;
-    if (activeId && sessionStore.current.has(activeId)) {
-      sessionStore.current.get(activeId)!.continuePrompt = null;
-    }
-    sendMessage("Kaldığın yerden hiçbir tekrar yapmadan doğrudan devam et.");
+    sendMessage("Devam et, sonraki adımları tamamla.");
   }, [sendMessage]);
-
-  const dismissContinuePrompt = useCallback(() => {
-    setContinuePrompt(null);
-    const activeId = currentSessionIdRef.current;
-    if (activeId && sessionStore.current.has(activeId)) {
-      sessionStore.current.get(activeId)!.continuePrompt = null;
-    }
-  }, []);
 
   const respondPermission = useCallback(
     (decision: PermissionDecision) => {
@@ -526,83 +470,8 @@ export function useCoordinatorChat(
     [messages, sendMessage]
   );
 
-  /**
-   * Sunucu tarafındaki registry'den bir terminal görevini gerçekten
-   * sonlandırır (SIGTERM/SIGKILL) ve yerel state'i günceller.
-   */
-  const killTerminalTask = useCallback(async (taskId: string) => {
-    try {
-      await fetch(`/api/terminal/tasks/${taskId}/kill`, { method: "POST" });
-    } catch {
-      // ağ hatası olsa bile aşağıdaki senkronizasyon durumu düzeltir
-    }
-    const currentId = currentSessionIdRef.current;
-    if (currentId) {
-      const st = sessionStore.current.get(currentId);
-      if (st) {
-        const idx = st.terminalTasks.findIndex((t) => t.id === taskId);
-        if (idx >= 0) {
-          st.terminalTasks[idx] = { ...st.terminalTasks[idx], status: "killed" };
-          setTerminalTasks([...st.terminalTasks]);
-        }
-      }
-    }
-  }, []);
-
-  /**
-   * Sayfa yenilendiğinde (F5) tarayıcı state'i sıfırlanır ama sunucu
-   * tarafındaki `terminalRegistry` hayatta kalır (bkz. terminalRegistry.ts).
-   * Bir oturum açıldığında, o oturuma ait hâlâ çalışan/son biten görevleri
-   * sunucudan çekip terminal panelini "diriltiyoruz" — böylece arka planda
-   * devam eden bir komut, sayfa yenilense bile kullanıcının önünde kalır.
-   */
-  const hydrateTerminalTasksFromServer = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(`/api/terminal/tasks?sessionId=${encodeURIComponent(id)}`);
-      if (!res.ok) return;
-      const data: { tasks?: TerminalTask[] } = await res.json();
-      if (!data.tasks || data.tasks.length === 0) return;
-      const st = getOrCreateSessionState(id);
-      for (const serverTask of data.tasks) {
-        const idx = st.terminalTasks.findIndex((t) => t.id === serverTask.id);
-        if (idx >= 0) st.terminalTasks[idx] = serverTask;
-        else st.terminalTasks.push(serverTask);
-      }
-      const hasRunning = data.tasks.some((t) => t.status === "running");
-      if (hasRunning) st.activeTerminalTaskId = data.tasks[data.tasks.length - 1].id;
-      if (currentSessionIdRef.current === id) {
-        setTerminalTasks([...st.terminalTasks]);
-        if (hasRunning) {
-          setActiveTerminalTaskId(st.activeTerminalTaskId);
-          setIsTerminalOpen(true);
-        }
-      }
-    } catch {
-      // sunucu ulaşılamazsa sessizce vazgeç
-    }
-  }, [getOrCreateSessionState]);
-
-  // Bir oturuma her geçildiğinde (ilk yüklemede ve sekme değişiminde) o
-  // oturumun sunucu tarafında hâlâ süren görevleri olup olmadığını kontrol et.
-  useEffect(() => {
-    if (sessionId) {
-      hydrateTerminalTasksFromServer(sessionId);
-    }
-  }, [sessionId, hydrateTerminalTasksFromServer]);
-
-  // Görünürde çalışan bir görev varsa, çıktısını periyodik olarak sunucudan
-  // tazele (chat SSE bağlantısı kopmuş olsa bile canlı kalmaya devam etsin).
-  useEffect(() => {
-    const hasRunning = terminalTasks.some((t) => t.status === "running");
-    if (!hasRunning) return;
-    const interval = setInterval(() => {
-      if (sessionId) hydrateTerminalTasksFromServer(sessionId);
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [terminalTasks, sessionId, hydrateTerminalTasksFromServer]);
-
   const undo = useCallback(
-    async (index?: number) => {
+    (index?: number) => {
       stop();
       const targetSessionId = currentSessionIdRef.current;
       const idx = index !== undefined ? index : messages.length - 1;
@@ -614,50 +483,7 @@ export function useCoordinatorChat(
           break;
         }
       }
-      const cutoff = targetUserIdx >= 0 ? targetUserIdx : idx;
-      const newMessages = messages.slice(0, cutoff);
-      const removedMessages = messages.slice(cutoff);
-
-      // ── ÖNCEKİ DAVRANIŞ (HATALI): sadece mesajları UI'dan gizlerdi; ne
-      // diskteki dosyaları eski haline getirir ne de kısaltılmış geçmişi
-      // oturuma kaydederdi — bu yüzden sayfa yenilenince "geri alınan"
-      // mesajlar ve dosya değişiklikleri geri gelirdi ("Geri Al butonu
-      // işlevsiz" şikayetinin kaynağı buydu). Şimdi:
-      // 1) Geri alınan mesajlara ait dosya değişiklikleri gerçekten diske
-      //    (eski içeriklerine) geri yazılır,
-      // 2) Kısaltılmış konuşma geçmişi oturum dosyasına kalıcı olarak yazılır.
-      for (const msg of removedMessages) {
-        if (!msg.editedFiles) continue;
-        for (const file of msg.editedFiles) {
-          try {
-            await fetch("/api/fs/restore", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                filePath: file.path,
-                oldContent: file.oldContent,
-                isNew: file.isNew,
-                sessionId: targetSessionId,
-              }),
-            });
-          } catch {
-            // bir dosya geri alınamazsa diğerlerini denemeye devam et
-          }
-        }
-      }
-
-      if (targetSessionId) {
-        try {
-          await fetch(`/api/sessions/${targetSessionId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ conversation_history: newMessages }),
-          });
-        } catch {
-          // kalıcı kayıt başarısız olsa bile en azından UI güncellensin
-        }
-      }
-
+      const newMessages = targetUserIdx >= 0 ? messages.slice(0, targetUserIdx) : messages.slice(0, idx);
       loadHistory(newMessages, targetSessionId);
     },
     [loadHistory, messages, stop]
@@ -672,7 +498,6 @@ export function useCoordinatorChat(
     pipelineEvents,
     continuePrompt,
     permissionRequest,
-    contextStatus,
     activityGroups,
     terminalTasks,
     activeTerminalTaskId,
@@ -681,13 +506,10 @@ export function useCoordinatorChat(
     setActiveTerminalTaskId,
     sendMessage,
     handleContinue,
-    dismissContinuePrompt,
     respondPermission,
     retry,
     undo,
     stop,
     loadHistory,
-    deleteSessionState,
-    killTerminalTask,
   };
 }

@@ -56,17 +56,20 @@ export function getFileBadge(filename: string): { label: string; bg: string; tex
   return { label: "📄", bg: "bg-gray-800 border border-gray-700", text: "text-gray-300 text-[10px]" };
 }
 
-export interface ParsedToolCall {
-  tool: string;
-  params: Record<string, unknown>;
-}
+export default function ToolCallBlock({ rawContent, isResult }: ToolCallBlockProps) {
+  const [open, setOpen] = useState(true);
+  const [copied, setCopied] = useState(false);
 
-// Ham `tool_call` JSON'unu ayrıştırır. Hem `ToolCallBlock` hem de gruplama
-// mantığı (`ToolCallGroup`/`MessageBubble`) aynı parser'ı kullanır — iki ayrı
-// yerde regex bakımı yapmamak için burada dışa açılıyor.
-export function parseToolCall(rawContent: string): ParsedToolCall {
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // JSON parse
   let toolName = "Eklenti";
   let params: Record<string, unknown> = {};
+
   try {
     const trimmed = rawContent.trim();
     if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
@@ -86,44 +89,11 @@ export function parseToolCall(rawContent: string): ParsedToolCall {
       }
     }
   } catch {
-    const toolMatch = /"tool"\s*:\s*"([^"]+)"/.exec(rawContent);
-    if (toolMatch) toolName = toolMatch[1];
-    const cmdMatch = /"command"\s*:\s*"([^"]+)"/.exec(rawContent);
-    if (cmdMatch) params.command = cmdMatch[1];
-    const pathMatch = /"(?:filePath|path)"\s*:\s*"([^"]+)"/.exec(rawContent);
-    if (pathMatch) params.filePath = pathMatch[1];
-    const queryMatch = /"query"\s*:\s*"([^"]+)"/.exec(rawContent);
-    if (queryMatch) params.query = queryMatch[1];
+    // JSON parse başarısız — ham içeriği göster, regex fallback kullanma
+    // (regex fallback kırılgan ve yanlış parse üretir)
+    toolName = "tool_call";
+    params = { raw: rawContent.length > 500 ? rawContent.slice(0, 500) + "…" : rawContent };
   }
-  return { tool: toolName, params };
-}
-
-// Bu araçlar "salt okunur keşif" niteliğindedir — MessageBubble bunların art
-// arda gelen çağrılarını tek bir "N adım incelendi" satırına toplar (bkz.
-// ToolCallGroup.tsx). Terminal komutları ve dosya düzenlemeleri KASITLI
-// olarak burada değil — her biri kendi başına önemli, ayrı ayrı görünmeli.
-export const EXPLORATION_TOOLS = new Set([
-  "read_file",
-  "list_directory",
-  "search_symbols",
-  "get_codebase_summary",
-  "get_architecture",
-  "search_graph",
-  "trace_path",
-]);
-
-export default function ToolCallBlock({ rawContent, isResult }: ToolCallBlockProps) {
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // JSON parse
-  const { tool: toolName, params } = parseToolCall(rawContent);
 
   // ── 1. Terminal Çıktısı (Tool Result) ──
   if (isResult) {

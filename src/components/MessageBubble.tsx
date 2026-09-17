@@ -8,13 +8,11 @@
 // - Kopyala, Yeniden Dene, Geri Al aksiyon butonları
 
 import { useState } from "react";
-import { Bot, User, Loader2, Copy, Check, RotateCw, Undo2, FileCode, Play, Terminal } from "lucide-react";
+import { Bot, User, Loader2, Copy, Check, RotateCw, Undo2, FileCode } from "lucide-react";
 import CodeBlock from "./CodeBlock";
 import ThinkBlock from "./ThinkBlock";
-import ToolCallBlock, { parseToolCall, EXPLORATION_TOOLS } from "./ToolCallBlock";
-import ToolCallGroup from "./ToolCallGroup";
+import ToolCallBlock from "./ToolCallBlock";
 import FileChangesBlock, { EditedFile } from "./FileChangesBlock";
-import WebSearchBlock from "./WebSearchBlock";
 
 interface MessageBubbleProps {
   role: "user" | "assistant";
@@ -23,35 +21,9 @@ interface MessageBubbleProps {
   statusNote?: string;
   editedFiles?: EditedFile[];
   sessionId?: string | null;
-  projectName?: string | null;
-  isLatest?: boolean;
   isStreaming?: boolean;
   onRetry?: () => void;
   onUndo?: () => void;
-  onAction?: (actionText: string) => void;
-}
-
-function extractNextStepSuggestions(content: string): string[] {
-  const suggestions: string[] = [];
-  const nextStepsIdx = content.search(/##?\s*(?:💡\s*)?(?:Sonraki Adımlar|Önerilen Adımlar|Sıradaki Adımlar)/i);
-  if (nextStepsIdx === -1) return [];
-
-  const sectionText = content.slice(nextStepsIdx);
-  const lines = sectionText.split("\n");
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (/^[-*•]\s+/.test(trimmed)) {
-      const clean = trimmed
-        .replace(/^[-*•]\s+/, "")
-        .replace(/[?？!！]/g, "")
-        .replace(/\b(?:ister misiniz|ekleyelim mi|yapalım mı|eklensin mi|ister misin)\b/gi, "")
-        .trim();
-      if (clean.length > 5 && clean.length < 80) {
-        suggestions.push(clean);
-      }
-    }
-  }
-  return suggestions.slice(0, 3);
 }
 
 type Segment =
@@ -102,10 +74,10 @@ function parseSegments(content: string, topThinking?: string): Segment[] {
         codeVal.trim().startsWith('{\n  "tool":') ||
         codeVal.trim().startsWith('{\n "tool":');
 
-      if (rawLang === "tool_result" || rawLang === "result") {
-        segments.push({ type: "tool_result", value: codeVal });
-      } else if (isToolCall) {
+      if (isToolCall) {
         segments.push({ type: "tool_call", value: codeVal });
+      } else if (rawLang === "tool_result") {
+        segments.push({ type: "tool_result", value: codeVal });
       } else if (rawLang === "text" || rawLang === "markdown" || rawLang === "md") {
         // Metin olarak etiketlenmiş normal açıklamaları kod kutusu yerine akıcı metin olarak göster
         segments.push({ type: "text", value: codeVal });
@@ -138,54 +110,6 @@ function parseSegments(content: string, topThinking?: string): Segment[] {
 }
 
 
-type RenderItem =
-  | Segment
-  | { type: "tool_group"; items: string[] }
-  | { type: "web_search"; query: string; resultText: string };
-
-function groupExplorationSegments(segments: Segment[]): RenderItem[] {
-  const result: RenderItem[] = [];
-  let currentRun: string[] = [];
-
-  const flushRun = () => {
-    if (currentRun.length === 0) return;
-    result.push({ type: "tool_group", items: currentRun });
-    currentRun = [];
-  };
-
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
-    if (seg.type === "tool_call") {
-      const { tool, params } = parseToolCall(seg.value);
-      if (tool === "web_search") {
-        flushRun();
-        let resultText = "";
-        if (i + 1 < segments.length && segments[i + 1].type === "tool_result") {
-          resultText = segments[i + 1].value;
-          i++; // sonraki tool_result'ı WebSearchBlock içine dahil et
-        }
-        result.push({
-          type: "web_search",
-          query: String(params.query || "Web Araması"),
-          resultText,
-        });
-        continue;
-      }
-      if (EXPLORATION_TOOLS.has(tool)) {
-        currentRun.push(seg.value);
-        continue;
-      }
-    }
-    if (seg.type === "tool_result" && currentRun.length > 0) {
-      continue;
-    }
-    flushRun();
-    result.push(seg);
-  }
-  flushRun();
-  return result;
-}
-
 export default function MessageBubble({
   role,
   content,
@@ -193,16 +117,13 @@ export default function MessageBubble({
   statusNote,
   editedFiles,
   sessionId,
-  projectName,
-  isLatest,
   isStreaming,
   onRetry,
   onUndo,
-  onAction,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const isUser = role === "user";
-  const renderItems = groupExplorationSegments(parseSegments(content, thinking));
+  const segments = parseSegments(content, thinking);
 
   const handleCopy = async () => {
     try {
@@ -228,14 +149,10 @@ export default function MessageBubble({
       </div>
 
       <div className={`max-w-[88%] ${isUser ? "items-end" : "items-start"} flex flex-col min-w-0`}>
-        {/* Canlı Adım Notu (Image 2 Tarzı) */}
-        {!isUser && statusNote && (
+        {/* Canlı Adım Notu (Araç çalıştırma veya ek adımlarda) */}
+        {!isUser && statusNote && segments.length > 0 && (
           <div className="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-950/60 border border-cyan-800/40 text-cyan-300 text-xs font-mono animate-in fade-in">
-            {isStreaming ? (
-              <Loader2 size={12} className="animate-spin text-cyan-400 shrink-0" />
-            ) : (
-              <Check size={12} className="text-emerald-400 shrink-0" />
-            )}
+            <Loader2 size={12} className="animate-spin text-cyan-400" />
             <span className="truncate max-w-lg">{statusNote}</span>
           </div>
         )}
@@ -248,28 +165,13 @@ export default function MessageBubble({
               : "text-gray-200"
           }`}
         >
-          {renderItems.map((seg, i) => {
-            if (seg.type === "tool_group") {
-              return <ToolCallGroup key={i} items={seg.items.map((v) => ({ rawContent: v }))} />;
-            }
-
-            if (seg.type === "web_search") {
-              return (
-                <WebSearchBlock
-                  key={i}
-                  query={seg.query}
-                  resultText={seg.resultText}
-                  isStreaming={isStreaming && i === renderItems.length - 1}
-                />
-              );
-            }
-
+          {segments.map((seg, i) => {
             if (seg.type === "think") {
               return (
                 <ThinkBlock
                   key={i}
                   content={seg.value}
-                  isStreaming={isStreaming && i === renderItems.length - 1}
+                  isStreaming={isStreaming && i === segments.length - 1}
                 />
               );
             }
@@ -299,18 +201,27 @@ export default function MessageBubble({
             return (
               <div key={i} className="whitespace-pre-wrap my-1 text-gray-200 leading-relaxed font-sans">
                 {seg.value}
-                {isStreaming && i === renderItems.length - 1 && (
+                {isStreaming && i === segments.length - 1 && (
                   <span className="inline-block w-1.5 h-3.5 bg-cyan-400 ml-1 align-middle animate-pulse" />
                 )}
               </div>
             );
           })}
 
-          {/* Eğer henüz hiçbir şey gelmediyse ama yayın devam ediyorsa "Working." göster */}
-          {!isUser && isStreaming && renderItems.length === 0 && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-400 font-sans py-1">
-              <span>Working</span>
-              <span className="inline-block w-1 h-1 rounded-full bg-cyan-400 animate-ping" />
+          {/* Eğer henüz hiçbir şey gelmediyse ama yayın devam ediyorsa "Working" veya Canlı Cold-Start uyarısı göster */}
+          {!isUser && isStreaming && segments.length === 0 && (
+            <div className="flex items-center gap-2 text-xs font-sans py-1">
+              {statusNote ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-950/70 border border-cyan-800/50 text-cyan-300 font-mono animate-in fade-in">
+                  <Loader2 size={13} className="animate-spin text-cyan-400 shrink-0" />
+                  <span>{statusNote}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-gray-400">
+                  <span>Working</span>
+                  <span className="inline-block w-1 h-1 rounded-full bg-cyan-400 animate-ping" />
+                </div>
+              )}
             </div>
           )}
 
@@ -318,69 +229,6 @@ export default function MessageBubble({
           {!isUser && editedFiles && editedFiles.length > 0 && (
             <FileChangesBlock files={editedFiles} sessionId={sessionId} />
           )}
-
-          {/* Hızlı Eylem Çipleri: Projeyi Çalıştır, Doğrula, Dosyaları Listele & Akıllı Öneriler */}
-          {!isUser && !isStreaming && onAction && (() => {
-            const hasEditedFiles = editedFiles && editedFiles.length > 0;
-            const hasRunCmd = content.includes("npm run dev") || content.includes("npm start") || content.includes("yarn dev");
-            const hasDelivery = content.includes("Nasıl Çalıştırılır") || content.includes("Tamamlanan İşlemler") || content.includes("Sonraki Adımlar");
-            const hasTscCmd = content.includes("npx tsc") || content.includes("npm run build");
-            const showChips = hasEditedFiles || hasRunCmd || hasDelivery || hasTscCmd;
-            if (!showChips) return null;
-            const suggestions = extractNextStepSuggestions(content);
-            return (
-              <div className="mt-3 pt-2.5 border-t border-gray-800/80 flex flex-wrap items-center gap-2">
-                {(hasRunCmd || hasDelivery || hasEditedFiles) && (
-                  <button
-                    type="button"
-                    onClick={() => onAction("Projeyi çalıştır ve durumunu kontrol et")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-700/50 hover:border-cyan-500 text-cyan-200 text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer select-none"
-                    title="Projeyi terminalde çalıştır"
-                  >
-                    <Play size={12} className="text-cyan-400 fill-cyan-400" />
-                    <span>Projeyi Çalıştır</span>
-                  </button>
-                )}
-
-                {(hasTscCmd || hasEditedFiles) && (
-                  <button
-                    type="button"
-                    onClick={() => onAction("npx tsc --noEmit ile syntax ve TypeScript kontrolü yap")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 border border-purple-700/50 hover:border-purple-500 text-purple-200 text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer select-none"
-                    title="TypeScript doğrulaması başlat"
-                  >
-                    <Terminal size={12} className="text-purple-400" />
-                    <span>Doğrula (npx tsc)</span>
-                  </button>
-                )}
-
-                {hasEditedFiles && (
-                  <button
-                    type="button"
-                    onClick={() => onAction("Oluşturulan dosyaları ve mimariyi özetle")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-900/80 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-gray-300 text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer select-none"
-                    title="Dosyaları ve mimariyi listele"
-                  >
-                    <FileCode size={12} className="text-gray-400" />
-                    <span>Dosyaları Listele</span>
-                  </button>
-                )}
-
-                {/* Sonraki Adımlardan Otomatik Çıkarılan Akıllı Öneri Çipleri */}
-                {suggestions.map((sug, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => onAction(sug)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-950/30 hover:bg-blue-900/50 border border-blue-800/40 hover:border-blue-700 text-blue-200 text-xs font-medium transition-all shadow-sm active:scale-95 cursor-pointer select-none"
-                    title={sug}
-                  >
-                    <span className="truncate max-w-[220px]">{sug}</span>
-                  </button>
-                ))}
-              </div>
-            );
-          })()}
         </div>
 
         {/* Butonlar: Kopyala, Yeniden Dene, Geri Al */}
