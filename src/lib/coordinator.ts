@@ -129,10 +129,12 @@ TEMEL KİMLİK VE ÇALIŞMA İLKELERİ:
    - Bir hata tespit ettiğinde dosyayı düzelten TAM kodu üret veya 'write_file' / 'patch_file' aracıyla uygula.
 
 5. DÜŞÜNME VE CEVAP SÜRECİ (HAYALİ HATA UYDURMA KESİNLİKLE YASAKTIR):
-   - Düşünce sürecini DAİMA <think>...</think> etiketleri içine yaz, kullanıcıya gidecek nihai cevabı dışına yaz.
+   - Düşünce sürecini DAİMA <think>...</think> etiketleri içine yazabilirsin.
+   - KRİTİK KURAL: Düşünme bittiğinde (</think> etiketinden sonra) MUTLAKA kullanıcıya doğrudan hitap eden nihai cevabını yaz. Asla cevabı sadece düşünme bloğunun içinde bırakma veya düşünme bittikten sonra boş yanıt dönme!
    - Terminal çıktısında somut bir hata görmediysen ASLA kafandan "TypeError", "global-error", "EADDRINUSE" veya "derleme hatası" gibi hayali problemler UYDURMA.
    - Bir dev sunucusunu test ettiğinde sistem sunucuyu başlatıp çıktısını doğruladıysa, projenin çalıştığını ve hangi portta dinlediğini (örn: http://localhost:3000) bildir.
    - Gerekli araçları çalıştırdıktan sonra görevi TAMAMLA; kullanıcıya neyi tespit ettiğini, neleri düzelttiğini net bir şekilde açıkla. Asla cevapsız bırakma.
+   - Kullanıcı durum sorduğunda ("bitti mi", "durum nedir", "proje hazır mı"), projenin mevcut çalışma durumunu netçe özetle.
 
 6. DİL VE ÜSLUP:
    - Türkçe, net, doğrudan ve profesyonel konuş.
@@ -184,6 +186,13 @@ export function isGratitude(text: string): boolean {
   return GRATITUDE_PATTERN.test(text.trim());
 }
 
+const STATUS_INQUIRY_PATTERN =
+  /^(?:bitti\s+mi\s+her\s*şey\s+yani|bitti\s+mi\s+yani|her\s*şey\s+bitti\s+mi|bitti\s+mi|tamamlandı\s+mı\s+her\s*şey|tamamland[ıi]\s+m[ıi]|tamam\s+m[ıi]|haz[ıi]r\s+m[ıi]|son\s+durum\s+ne(?:dir)?|durum\s+ne(?:dir)?|proje\s+haz[ıi]r\s+m[ıi]|proje\s+bitti\s+mi|proje\s+çal[ıi]ş[ıi]yor\s+mu|bitti\s+mi\s+art[ıi]k)[.?!]?$/i;
+
+export function isStatusInquiry(text: string): boolean {
+  return STATUS_INQUIRY_PATTERN.test(text.trim());
+}
+
 /**
  * Kullanıcı girdisini pipeline tetikleme açısından ön-değerlendirir.
  * Kısa devre (LLM'e gitmeden) doğrudan cevap üretilecek durumları yakalar.
@@ -217,6 +226,25 @@ export function preEvaluateUserInput(
       shouldStartPipeline: false,
       immediateReply: reply,
     };
+  }
+
+  // Durum sorgusu ("bitti mi her şey yani", "hazır mı", "son durum nedir")
+  if (isStatusInquiry(trimmed)) {
+    const lastAssistant = [..._history].reverse().find((m) => m.role === "assistant");
+    const hasSuccessNote =
+      lastAssistant?.content.includes("başarıyla") ||
+      lastAssistant?.content.includes("çalışıyor") ||
+      lastAssistant?.content.includes("tamamlandı") ||
+      lastAssistant?.content.includes("derlendi") ||
+      lastAssistant?.content.includes("kaydedildi");
+
+    if (hasSuccessNote) {
+      return {
+        shouldStartPipeline: false,
+        immediateReply:
+          "Evet, her şey başarıyla tamamlandı! Projeniz tüm bağımlılıklarıyla hatasız derlenmiş ve çalışmaya hazır durumdadır. Yeni bir geliştirme veya test yapmak isterseniz hemen başlayabiliriz.",
+      };
+    }
   }
 
   // Sadece sıralı pipeline modunda ve açıkça /run komutu verildiğinde
