@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import ChatPanel from "@/components/ChatPanel";
@@ -95,6 +95,20 @@ export default function Home() {
     }
   }, []);
 
+  const chatOptions = useMemo(
+    () => ({
+      onTitleUpdate: refreshSessions,
+      onSessionCreated: (newId: string) => {
+        setActiveSessionId(newId);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("myf_active_session", newId);
+        }
+        refreshSessions();
+      },
+    }),
+    [refreshSessions]
+  );
+
   const {
     messages,
     isStreaming,
@@ -120,16 +134,7 @@ export default function Home() {
     killTerminalTask,
     removeTerminalTask,
     clearFinishedTerminalTasks,
-  } = useCoordinatorChat(activeSessionId, {
-    onTitleUpdate: refreshSessions,
-    onSessionCreated: (newId) => {
-      setActiveSessionId(newId);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("myf_active_session", newId);
-      }
-      refreshSessions();
-    },
-  });
+  } = useCoordinatorChat(activeSessionId, chatOptions);
 
   const handleSelectSession = useCallback(
     async (id: string) => {
@@ -161,7 +166,11 @@ export default function Home() {
   );
 
   // Sayfa ilk açıldığında veya F5 atıldığında en son aktif oturumu otomatik geri yükle
+  const initialLoadDone = useRef(false);
   useEffect(() => {
+    if (initialLoadDone.current) return;
+    initialLoadDone.current = true;
+
     fetch("/api/settings")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {

@@ -18,6 +18,14 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 - **Kazara Yenileme Koruması (`beforeunload` Tarayıcı Uyarısı):**
   - Canlı akış sürerken veya çalışan terminal görevleri varken kullanıcının yanlışlıkla sayfayı yenilemesini veya sekmeyi kapatmasını önleyen tarayıcı onay diyaloğu eklendi.
 
+### 🐛 Maximum Update Depth Exceeded (Sonsuz Re-Render Döngüsü) Düzeltmesi
+- **Hook Referans Kararlılığı (`useCoordinatorChat`):**
+  - `options` parametresi `optionsRef` ile sarmalanarak `attachToLiveSession`, `sendMessage` ve `loadHistory` fonksiyonlarının her render'da yeniden üretilip bağımlılık zincirini tetiklemesi önlendi.
+- **Tekil İlk Yükleme Koruması (`page.tsx`):**
+  - `chatOptions` nesnesi `useMemo` ile stabilize edildi; başlangıç ayar ve oturum geri yükleme `useEffect`'i `initialLoadDone` bayrağı ile tek sefere kilitlendi.
+- **Ayarlar Modalı Koruması (`SettingsModal.tsx`):**
+  - Modal kapalıyken arka plandaki ayar değişikliklerinin `setDraft` tetikleyerek React render sınırını aşması (`if (!open) return`) engellendi.
+
 ## [1.5.0] - 2026-09-18
 
 ### 🛑 Terminal Görev Sekmelerinin Kesin Kapatılması & Portların Serbest Bırakılması

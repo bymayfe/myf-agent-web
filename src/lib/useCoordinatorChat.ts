@@ -78,6 +78,9 @@ export function useCoordinatorChat(
   const [activeTerminalTaskId, setActiveTerminalTaskId] = useState<string | null>(null);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
 
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
   const abortRef = useRef<AbortController | null>(null);
   const currentSessionIdRef = useRef<string | null>(sessionId);
   const sessionStore = useRef<Map<string, SessionRuntimeState>>(new Map());
@@ -209,7 +212,7 @@ export function useCoordinatorChat(
               else st.activityGroups.push(group);
             } else if (frame.event === "session_title_updated") {
               const data = frame.data as { sessionId: string; title: string };
-              options?.onTitleUpdate?.(data.sessionId, data.title);
+              optionsRef.current?.onTitleUpdate?.(data.sessionId, data.title);
             } else if (frame.event === "terminal_task") {
               const task = frame.data as TerminalTask;
               const idx = st.terminalTasks.findIndex((t) => t.id === task.id);
@@ -246,7 +249,7 @@ export function useCoordinatorChat(
         }
       }
     },
-    [getOrCreateSessionState, options, syncActiveView]
+    [getOrCreateSessionState, syncActiveView]
   );
 
   const loadHistory = useCallback(
@@ -471,8 +474,8 @@ export function useCoordinatorChat(
 
               currentSessionIdRef.current = targetSessionId;
               syncActiveView(st);
-              options?.onSessionCreated?.(data.sessionId);
-              options?.onTitleUpdate?.(data.sessionId, data.title);
+              optionsRef.current?.onSessionCreated?.(data.sessionId);
+              optionsRef.current?.onTitleUpdate?.(data.sessionId, data.title);
             }
 
             const st = targetSessionId ? getOrCreateSessionState(targetSessionId) : null;
@@ -513,36 +516,25 @@ export function useCoordinatorChat(
                 else st.activityGroups.push(group);
               } else if (frame.event === "session_title_updated") {
                 const data = frame.data as { sessionId: string; title: string };
-                options?.onTitleUpdate?.(data.sessionId, data.title);
+                optionsRef.current?.onTitleUpdate?.(data.sessionId, data.title);
               } else if (frame.event === "pipeline_start") {
                 const pData = frame.data as { requirement?: string } | string;
                 const isGeneric = (t?: string) => {
                   if (!t) return true;
                   const s = t.trim().toLowerCase();
                   return (
-                    s.startsWith("/") ||
-                    s === "devam" ||
-                    s === "devam et" ||
-                    s === "continue" ||
-                    s === "başlat" ||
-                    s === "start" ||
-                    s === "run" ||
-                    s === "true" ||
-                    s.includes("sonraki adımları tamamla") ||
-                    s.includes("kaldığın yerden devam et")
+                    s === "pipeline" ||
+                    s === "sıralı pipeline" ||
+                    s === "sıralı pipeline başlat" ||
+                    s.startsWith("sıralı pipeline")
                   );
                 };
+                const userReq =
+                  typeof pData === "object" && pData?.requirement
+                    ? pData.requirement
+                    : prompt;
 
-                let req = typeof pData === "string" ? pData : pData?.requirement;
-                if (!req || isGeneric(req)) {
-                  const lastUser = [...baseHistory].reverse().find(
-                    (m) => m.role === "user" && !isGeneric(m.content)
-                  );
-                  req = lastUser?.content || prompt;
-                }
-                setPipelineRequested(true);
-                setPipelineRequirement(req);
-                startPipelineExecution(req);
+                startPipelineExecution(isGeneric(userReq) ? prompt : userReq);
               } else if (frame.event === "terminal_task") {
                 const task = frame.data as TerminalTask;
                 const idx = st.terminalTasks.findIndex((t) => t.id === task.id);
@@ -558,6 +550,9 @@ export function useCoordinatorChat(
                     output: st.terminalTasks[idx].output + chunk,
                   };
                 }
+              } else if (frame.event === "done") {
+                st.isStreaming = false;
+                setIsStreaming(false);
               } else if (frame.event === "error") {
                 const last = st.messages[st.messages.length - 1];
                 if (last && last.role === "assistant") {
@@ -600,7 +595,7 @@ export function useCoordinatorChat(
         }
       }
     },
-    [getOrCreateSessionState, messages, options, startPipelineExecution, syncActiveView]
+    [getOrCreateSessionState, messages, startPipelineExecution, syncActiveView]
   );
 
   const handleContinue = useCallback(() => {

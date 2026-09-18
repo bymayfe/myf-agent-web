@@ -65,11 +65,12 @@ export default function SettingsModal({ open, onClose, settings, providers, onSa
   const [showFolderHelp, setShowFolderHelp] = useState(false);
 
   useEffect(() => {
+    if (!open) return;
     setDraft(settings);
     setIsCustomModel(false);
     setCustomModel("");
     setApiKeyInput("");
-  }, [settings, open]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
