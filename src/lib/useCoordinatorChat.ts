@@ -115,23 +115,139 @@ export function useCoordinatorChat(
     setPermissionRequest(state.permissionRequest ? { ...state.permissionRequest } : null);
   }, []);
 
-  const stop = useCallback(() => {
+  const stop = useCallback(async () => {
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
     }
     const currentId = currentSessionIdRef.current;
-    if (currentId && sessionStore.current.has(currentId)) {
-      const st = sessionStore.current.get(currentId)!;
-      st.isStreaming = false;
-      st.continuePrompt = null;
-      st.permissionRequest = null;
+    if (currentId) {
+      try {
+        await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "stop", sessionId: currentId }),
+        });
+      } catch {
+        // ignore
+      }
+      if (sessionStore.current.has(currentId)) {
+        const st = sessionStore.current.get(currentId)!;
+        st.isStreaming = false;
+        st.continuePrompt = null;
+        st.permissionRequest = null;
+      }
     }
     setIsStreaming(false);
     setIsPipelineRunning(false);
     setContinuePrompt(null);
     setPermissionRequest(null);
   }, []);
+
+  const attachToLiveSession = useCallback(
+    async (targetSessionId: string) => {
+      try {
+        const res = await fetch(`/api/chat?sessionId=${targetSessionId}&action=attach`);
+        if (!res.ok || !res.body) return;
+
+        setIsStreaming(true);
+        const st = getOrCreateSessionState(targetSessionId);
+        st.isStreaming = true;
+
+        const controller = new AbortController();
+        abortRef.current = controller;
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const { frames, rest } = parseSseChunk(buffer);
+          buffer = rest;
+
+          for (const frame of frames) {
+            if (frame.event === "content") {
+              const last = st.messages[st.messages.length - 1];
+              if (last && last.role === "assistant") {
+                last.content += (frame.data as string);
+                last.statusNote = undefined;
+              } else {
+                st.messages.push({ role: "assistant", content: frame.data as string });
+              }
+            } else if (frame.event === "thinking") {
+              const last = st.messages[st.messages.length - 1];
+              if (last && last.role === "assistant") {
+                last.thinking = (last.thinking ?? "") + (frame.data as string);
+              } else {
+                st.messages.push({ role: "assistant", content: "", thinking: frame.data as string });
+              }
+            } else if (frame.event === "status") {
+              const last = st.messages[st.messages.length - 1];
+              if (last && last.role === "assistant") {
+                last.statusNote = (frame.data as string) || undefined;
+              }
+            } else if (frame.event === "file_changes") {
+              const last = st.messages[st.messages.length - 1];
+              if (last && last.role === "assistant") {
+                last.editedFiles = frame.data as EditedFile[];
+              }
+            } else if (frame.event === "continue_prompt") {
+              const data = frame.data as { needed: boolean; message: string };
+              if (data.needed) {
+                st.continuePrompt = { visible: true, message: data.message };
+              }
+            } else if (frame.event === "permission_request") {
+              st.permissionRequest = frame.data as PermissionRequest;
+            } else if (frame.event === "activity") {
+              const group = frame.data as ActivityGroup;
+              const idx = st.activityGroups.findIndex((g) => g.turnId === group.turnId);
+              if (idx >= 0) st.activityGroups[idx] = group;
+              else st.activityGroups.push(group);
+            } else if (frame.event === "session_title_updated") {
+              const data = frame.data as { sessionId: string; title: string };
+              options?.onTitleUpdate?.(data.sessionId, data.title);
+            } else if (frame.event === "terminal_task") {
+              const task = frame.data as TerminalTask;
+              const idx = st.terminalTasks.findIndex((t) => t.id === task.id);
+              if (idx >= 0) st.terminalTasks[idx] = task;
+              else st.terminalTasks.push(task);
+              st.activeTerminalTaskId = task.id;
+            } else if (frame.event === "terminal_chunk") {
+              const { taskId, chunk } = frame.data as { taskId: string; chunk: string };
+              const idx = st.terminalTasks.findIndex((t) => t.id === taskId);
+              if (idx >= 0) {
+                st.terminalTasks[idx] = {
+                  ...st.terminalTasks[idx],
+                  output: st.terminalTasks[idx].output + chunk,
+                };
+              }
+            } else if (frame.event === "done") {
+              st.isStreaming = false;
+              setIsStreaming(false);
+            }
+          }
+
+          if (currentSessionIdRef.current === targetSessionId) {
+            syncActiveView(st);
+          }
+        }
+      } catch {
+        // stream kesildi veya kapandı
+      } finally {
+        if (targetSessionId && sessionStore.current.has(targetSessionId)) {
+          sessionStore.current.get(targetSessionId)!.isStreaming = false;
+        }
+        if (currentSessionIdRef.current === targetSessionId) {
+          setIsStreaming(false);
+        }
+      }
+    },
+    [getOrCreateSessionState, options, syncActiveView]
+  );
 
   const loadHistory = useCallback(
     (history: UiMessage[], targetId?: string | null) => {
@@ -154,6 +270,18 @@ export function useCoordinatorChat(
         };
         sessionStore.current.set(activeId, state);
         syncActiveView(state);
+
+        // F5 veya sayfa yükleme sonrası kontrol: Sunucuda bu oturum için devam eden bir arka plan süreci var mı?
+        fetch(`/api/chat?sessionId=${activeId}&action=status`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (d && d.isRunning) {
+              state.isStreaming = true;
+              syncActiveView(state);
+              attachToLiveSession(activeId);
+            }
+          })
+          .catch(() => {});
       } else {
         // Taslak / Yeni sohbet
         setMessages(history);
@@ -165,7 +293,7 @@ export function useCoordinatorChat(
         setPermissionRequest(null);
       }
     },
-    [syncActiveView]
+    [attachToLiveSession, syncActiveView]
   );
 
   const startPipelineExecution = useCallback(

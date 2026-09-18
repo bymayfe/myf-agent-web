@@ -180,6 +180,19 @@ export default function Home() {
     }
   }, [refreshSessions, handleSelectSession]);
 
+  // Süreç devam ederken kazara F5 veya sekme kapatmayı engelleme (tarayıcı uyarı diyaloğu)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isStreaming || isPipelineRunning || terminalTasks.some((t) => t.status === "running")) {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isStreaming, isPipelineRunning, terminalTasks]);
+
   const handleNewSession = async (projectDir?: string) => {
     try {
       const slug = projectDir ? projectDir.split("/").filter(Boolean).pop() || "proje" : "genel";

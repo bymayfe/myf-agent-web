@@ -4,6 +4,20 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.6.0] - 2026-09-18
+
+### ⚡ F5 ve Yenilemede Kesintisiz Arka Plan Süreci (SessionExecutionManager) & Canlı Re-Attach
+- **Arka Planda Kesintisiz Yürütme (`SessionExecutionManager`):**
+  - Tarayıcıda F5'e basıldığında veya sekme yenilendiğinde HTTP bağlantısının kopması (`req.signal.abort`) artık sunucudaki LLM ve araç döngüsünü durdurmaz.
+  - `sessionExecutionManager` singleton mimarisi devreye alındı; LLM çıkarımları, düşünce adımları, dosya yazımları ve araç çalıştırmaları sunucu tarafında bağımsız bir arka plan süreci olarak akışına devam eder.
+- **Canlı Yeniden Bağlanma (Live Re-Attach) & SSE Olay Tamponu (Event Buffer):**
+  - Sunucuda üretilen tüm SSE olayları (`content`, `thinking`, `status`, `activity`, `file_changes`, `terminal_task` vb.) oturum bazlı tamponlanır.
+  - Sayfa yenilendiğinde veya oturuma geri dönüldüğünde istemci `GET /api/chat?sessionId=...&action=status` ile canlı süreci algılar ve `action=attach` ile canlı akışa kaldığı yerden bağlanır; kayıp olmadan canlı yanıt akmaya devam eder.
+- **Gerçek Zamanlı Adım Kalıcılığı (`persistTurn`):**
+  - Çok adımlı araç döngüsünde her araç çağrısının hemen ardından oturum geçmişi diske (`data/sessions/<id>.json`) anlık kaydedilir; elektrik kesilse veya sekme kapansa dahi ara adımlar korunur.
+- **Kazara Yenileme Koruması (`beforeunload` Tarayıcı Uyarısı):**
+  - Canlı akış sürerken veya çalışan terminal görevleri varken kullanıcının yanlışlıkla sayfayı yenilemesini veya sekmeyi kapatmasını önleyen tarayıcı onay diyaloğu eklendi.
+
 ## [1.5.0] - 2026-09-18
 
 ### 🛑 Terminal Görev Sekmelerinin Kesin Kapatılması & Portların Serbest Bırakılması
