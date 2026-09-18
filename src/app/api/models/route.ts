@@ -88,14 +88,40 @@ export async function GET(req: NextRequest) {
   }
 
   const prefix = provConfig.model_prefix ? `${provConfig.model_prefix}/` : "";
-  const models: ModelOption[] = Object.keys(provConfig.model_context_windows || {}).map((mKey) => {
-    const fullId = mKey.startsWith(prefix) ? mKey : `${prefix}${mKey}`;
-    return {
-      id: fullId,
-      name: mKey,
-      label: `${mKey} (${activeProvider})`,
-    };
-  });
+  const availableModels = (provConfig as Record<string, unknown>).available_models as
+    | Record<string, { size?: string; context_window?: number; description?: string }>
+    | undefined;
+
+  let models: ModelOption[];
+
+  if (availableModels && Object.keys(availableModels).length > 0) {
+    // available_models varsa: ad + boyut + açıklama ile zengin liste
+    models = Object.entries(availableModels).map(([mKey, mInfo]) => {
+      const fullId = mKey.startsWith(prefix) ? mKey : `${prefix}${mKey}`;
+      const labelParts = [mKey];
+      if (mInfo.size) labelParts.push(`(${mInfo.size})`);
+      if (mInfo.description) labelParts.push(`— ${mInfo.description}`);
+      return {
+        id: fullId,
+        name: mKey,
+        label: labelParts.join(" "),
+        context_window: mInfo.context_window,
+      };
+    });
+  } else {
+    // Fallback: model_context_windows (meta "default" key'ini atla)
+    const SKIP_KEYS = new Set(["default"]);
+    models = Object.keys(provConfig.model_context_windows || {})
+      .filter((k) => !SKIP_KEYS.has(k))
+      .map((mKey) => {
+        const fullId = mKey.startsWith(prefix) ? mKey : `${prefix}${mKey}`;
+        return {
+          id: fullId,
+          name: mKey,
+          label: `${mKey} (${activeProvider})`,
+        };
+      });
+  }
 
   return NextResponse.json({ ok: true, provider: activeProvider, models });
 }

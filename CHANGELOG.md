@@ -4,6 +4,24 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.7.0] - 2026-09-18
+
+### 🤖 Yeni Yerel GGUF Modelleri & llama.cpp Dinamik Model Desteği (Web UI)
+
+#### `defaultProviders.ts` — `llama_cpp` Provider Güncellendi
+- `available_models` bölümü eklendi: 6 GGUF model (ad, boyut, context window, açıklama)
+- `model_context_windows` tüm 6 modelle güncellendi; `Huihui-Qwen3.8-27B` için `16384` (VRAM koruması), diğerleri `32768`
+- `agent_models` boş `"openai/"` değerlerinden tam `"openai/default"` değerlerine güncellendi
+
+#### `api/models/route.ts` — Zengin Model Listesi
+- `available_models` alanı varsa öncelikli olarak kullanılır: model adı + boyut + açıklama ile zengin label üretilir
+- Fallback olarak `model_context_windows` kullanılır; `"default"` gibi meta key'ler artık filtreleniyor
+
+#### Yeni GGUF Modelleri (llama.cpp ile kullanılabilir)
+- **Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M** (5.1 GB) — Yüksek kaliteli Q5_K_M sansürsüz kodlama
+- **Qwen2.5-Coder-14B-Instruct-abliterated-IQ3_M** (6.5 GB) — Büyük 14B sansürsüz kodlama
+- **Huihui-Qwen3.8-27B-abliterated-UD-DW-Q4_K_M** (15.4 GB) — En güçlü lokal model, 27B sansürsüz
+
 ## [1.6.0] - 2026-09-18
 
 ### ⚡ F5 ve Yenilemede Kesintisiz Arka Plan Süreci (SessionExecutionManager) & Canlı Re-Attach
