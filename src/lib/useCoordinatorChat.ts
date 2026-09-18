@@ -81,6 +81,7 @@ export function useCoordinatorChat(
   const abortRef = useRef<AbortController | null>(null);
   const currentSessionIdRef = useRef<string | null>(sessionId);
   const sessionStore = useRef<Map<string, SessionRuntimeState>>(new Map());
+  const dismissedTaskIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     currentSessionIdRef.current = sessionId;
@@ -537,9 +538,12 @@ export function useCoordinatorChat(
         setTerminalTasks((prev) => {
           const map = new Map<string, TerminalTask>();
           for (const t of data.tasks) {
-            map.set(t.id, t);
+            if (!dismissedTaskIdsRef.current.has(t.id)) {
+              map.set(t.id, t);
+            }
           }
           for (const t of prev) {
+            if (dismissedTaskIdsRef.current.has(t.id)) continue;
             if (!map.has(t.id)) {
               map.set(t.id, t);
             } else {
@@ -605,11 +609,12 @@ export function useCoordinatorChat(
 
   const removeTerminalTask = useCallback(async (id: string) => {
     try {
-      await fetch(`/api/terminal/tasks/${id}`, { method: "DELETE" });
+      dismissedTaskIdsRef.current.add(id);
       setTerminalTasks((prev) => prev.filter((t) => t.id !== id));
       if (activeTerminalTaskId === id) {
         setActiveTerminalTaskId(null);
       }
+      await fetch(`/api/terminal/tasks/${id}`, { method: "DELETE" });
     } catch (err) {
       console.error("removeTerminalTask hatası:", err);
     }

@@ -142,7 +142,11 @@ TEMEL KİMLİK VE ÇALIŞMA İLKELERİ:
    - Bu web kokpiti (arayüz) localhost:3111 üzerinde çalışmaktadır.
    - Kullanıcının hedef projesi ile bu kokpit ortamı tamamen BAĞIMSIZDIR.
    - Kullanıcı projesinin portunu (Next.js için 3000, Vite için 5173 vb.) kokpitin 3111 portu ile KESİNLİKLE KARIŞTIRMA!
-   - Kullanıcı projesini durdurmak veya yeniden başlatmak için KESİNLİKLE 'pkill -f "next dev"' veya 3111 portunu hedef alan komutlar verme/çalıştırma, çünkü bu kullanıcı arayüzünü çökertecektir.`;
+   - Kullanıcı projesini durdurmak veya yeniden başlatmak için KESİNLİKLE 'pkill -f "next dev"' veya 3111 portunu hedef alan komutlar verme/çalıştırma, çünkü bu kullanıcı arayüzünü çökertecektir.
+
+8. NEZAKET VE ONAY İLETİLERİ (Örn: 'eyw', 'teşekkürler', 'sağol', 'tamamdır', 'harika', 'eline sağlık'):
+   - Kullanıcı sadece teşekkür ettiğinde veya memnuniyetini bildirdiğinde KESİNLİKLE projeyi veya testleri baştan tekrar çalıştırma! 'run_command' veya 'read_file' çağırma.
+   - Nezaketle rica ederim de, projenin hazır olduğunu belirt ve kullanıcıdan yeni bir istek bekle.`;
 
 export function buildSystemPrompt(params: {
   coordinatorName: string;
@@ -173,6 +177,13 @@ export interface CoordinatorDecision {
   immediateReply?: string;
 }
 
+const GRATITUDE_PATTERN =
+  /^(?:eyw|eyvallah|teşekkürler|teşekkür\s+ederim|tesekkurler|tesekkur\s+ederim|sağol|sagol|eline\s+sağlık|eline\s+saglik|harika|süper|super|tamamdır|tamamdir|tamam\s+sağol|eyw\s+kral|eyvallah\s+kral|çok\s+sağol|cok\s+sagol|harikasın|harikasin|helal|adamsın|adamsin|mükemmel|mukemmel)[.!]?\s*(?::\)|🙏|👍|🔥)?$/i;
+
+export function isGratitude(text: string): boolean {
+  return GRATITUDE_PATTERN.test(text.trim());
+}
+
 /**
  * Kullanıcı girdisini pipeline tetikleme açısından ön-değerlendirir.
  * Kısa devre (LLM'e gitmeden) doğrudan cevap üretilecek durumları yakalar.
@@ -187,6 +198,25 @@ export function preEvaluateUserInput(
   // Sadece açıkça "/cancel" veya "iptal" dediğinde kısa devre yap
   if (trimmed === "/cancel" || trimmed === "/stop") {
     return { shouldStartPipeline: false, immediateReply: "İşlem iptal edildi. Yeni istek yazabilirsiniz." };
+  }
+
+  // Nezaket / teşekkür kalıplarında test/araç döngüsüne girmeden doğrudan nazik yanıt dön
+  if (isGratitude(trimmed)) {
+    const lastAssistant = [..._history].reverse().find((m) => m.role === "assistant");
+    const hasSuccessNote =
+      lastAssistant?.content.includes("başarıyla") ||
+      lastAssistant?.content.includes("çalışıyor") ||
+      lastAssistant?.content.includes("tamamlandı") ||
+      lastAssistant?.content.includes("derlendi");
+
+    const reply = hasSuccessNote
+      ? "Rica ederim! Projeniz başarıyla çalışır durumda ve hazır. Yeni bir özellik eklemek veya başka bir konuda çalışmak isterseniz buradayım."
+      : "Rica ederim! Yardımcı olabileceğim başka bir konu veya yeni bir istek olursa buradayım.";
+
+    return {
+      shouldStartPipeline: false,
+      immediateReply: reply,
+    };
   }
 
   // Sadece sıralı pipeline modunda ve açıkça /run komutu verildiğinde

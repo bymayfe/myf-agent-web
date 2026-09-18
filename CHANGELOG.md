@@ -4,6 +4,33 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.5.0] - 2026-09-18
+
+### 🛑 Terminal Görev Sekmelerinin Kesin Kapatılması & Portların Serbest Bırakılması
+- **Kapatılan Sekmelerin Geri Gelmesi Engellendi:**
+  - Kapatılan (`X`) veya silinen terminal görevlerinin periyodik arka plan taraması (`scanRunningDevServers`) sebebiyle hemen tekrar ekrana gelmesi sorunu kökten giderildi.
+  - `dismissedTaskIds`, `dismissedPids` ve `dismissedPorts` dışlama setleri oluşturularak arka plan taramalarının kapatılan görevleri diriltmesi engellendi.
+  - `useCoordinatorChat.ts` içerisine `dismissedTaskIdsRef` eklenerek yerel React state ile backend anket senkronizasyonu arasındaki yarış durumları (race-condition) önlendi.
+- **Port ve Süreç Ağacı Temizliği (`fuser` & Recursive `pgrep`):**
+  - Görev sonlandırıldığında veya sekme silindiğinde dinleyen portlar `fuser -k -9 <port>/tcp` ile anında serbest bırakılır.
+  - `killProcessTree` fonksiyonu özyinelemeli `pgrep -P` ile alt süreçleri (Next.js, Vite, npm, node worker'ları) hiyerarşik olarak toplayıp SIGKILL fallback ile temizler; askıda kalan zombi süreç ve sonsuz döngü hissi tamamen ortadan kaldırıldı.
+
+### 📜 Akıllı Otomatik Kaydırma & Yüzen "Yeni İleti ↓" Butonu
+- **Zorunlu Aşağı Çekme (Aggressive Auto-Scroll) Kaldırıldı:**
+  - Mesaj akarken veya düşünce adımları üretilirken kullanıcının yukarı kaydırıp önceki düşünceleri/kodları okumasını engelleyen agresif otomatik kaydırma iptal edildi.
+  - Mesaj konteyneri kaydırma konumu dinamik takip edilir; kullanıcı en alttan yukarıdaysa ekran konumu sabit kalır.
+- **Yüzen "Yeni İleti ↓" Butonu:**
+  - Kullanıcı yukarıdayken yeni bir yanıt veya akış geldiğinde mesaj alanının üzerinde dikkat çekici ve şık bir **"Yeni İleti ↓"** butonu (animasyonlu) belirir.
+  - Kullanıcı sadece geçmişi incelerken ise **"Aşağı Kaydır ↓"** butonu sunulur.
+  - Butona tıklandığında veya kullanıcı yeni bir mesaj gönderdiğinde akıcı bir şekilde en alta inilir.
+
+### 🤝 Nezaket / Teşekkür ("eyw", "sağol", "teşekkürler") Algılama & Sıfır Araç Döngüsü
+- **Kısa Devre Nezaket Yanıtı (`preEvaluateUserInput`):**
+  - Kullanıcı "eyw", "eyvallah", "teşekkürler", "sağol", "eline sağlık", "harika", "tamamdır" gibi teşekkür veya memnuniyet iletisi yazdığında ajanın gereksiz yere 14 adımlık test/derleme (`npm run build`, `npm run dev`) döngüsüne girmesi engellendi.
+  - Konuşma durumuna göre sıfır gecikmeyle ve token harcamadan projenin hazır olduğunu teyit eden nezaket cevabı dönülür.
+- **Koordinatör Sistem Promptu Kuralı (Kural 8):**
+  - Koordinatör sistem promptuna teşekkür/onay durumlarında tekrar derleme veya dosya okuma araçlarını çağırmama kuralı eklendi.
+
 ## [1.4.0] - 2026-09-18
 
 ### 🧠 Çok Aşamalı Düşünme Pencereleri ("Düşünce 1, 2, 3...") & Evrensel Sağlayıcı Uyumluluğu

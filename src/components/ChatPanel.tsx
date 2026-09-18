@@ -16,6 +16,7 @@ import {
   Plus,
   Mic,
   ArrowUp,
+  ArrowDown,
   Terminal as TerminalIcon,
   ExternalLink,
   X,
@@ -97,8 +98,32 @@ export default function ChatPanel({
   const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [hasNewMessage, setHasNewMessage] = useState(false);
+  const prevMessagesCountRef = useRef(messages.length);
+  const prevLastContentRef = useRef(messages[messages.length - 1]?.content ?? "");
+
+  // Kullanıcının mesaj listesini yukarı kaydırıp kaydırmadığını tespit et
+  const handleScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const userIsUp = distanceToBottom > 120;
+    setIsScrolledUp(userIsUp);
+    if (!userIsUp) {
+      setHasNewMessage(false);
+    }
+  };
+
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    setIsScrolledUp(false);
+    setHasNewMessage(false);
+  };
 
   // Slash Menü Durumu (input "/" ile başlıyorsa ve boşluk içermiyorsa)
   const isSlashActive = input.startsWith("/") && !input.includes(" ") && !slashMenuDismissed;
@@ -177,22 +202,47 @@ export default function ChatPanel({
     }
   };
 
+  // Akıllı otomatik kaydırma: Kullanıcı yukarıdayken onu zorla aşağı çekme, Yeni İleti butonunu göster
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, permissionRequest, continuePrompt, activeTask]);
+    const lastMsg = messages[messages.length - 1];
+    const isNewMessage = messages.length > prevMessagesCountRef.current;
+    const isContentUpdated = lastMsg && lastMsg.content !== prevLastContentRef.current;
+
+    prevMessagesCountRef.current = messages.length;
+    if (lastMsg) {
+      prevLastContentRef.current = lastMsg.content;
+    }
+
+    if (isScrolledUp) {
+      if (isNewMessage || isContentUpdated) {
+        setHasNewMessage(true);
+      }
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isStreaming, permissionRequest, continuePrompt, activeTask, isScrolledUp]);
 
   const handleSend = () => {
     const text = input.trim();
     if (!text || isStreaming) return;
+    setIsScrolledUp(false);
+    setHasNewMessage(false);
     onSend(text);
     setInput("");
     setSlashMenuDismissed(false);
+    setTimeout(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 50);
   };
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-[#0d0e14]">
+    <div className="flex-1 flex flex-col min-w-0 bg-[#0d0e14] relative">
       {/* Mesaj Akışı (Antigravity Feed) */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4"
+      >
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center text-gray-500 gap-3 py-20">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
@@ -221,6 +271,24 @@ export default function ChatPanel({
         ))}
         <div ref={bottomRef} />
       </div>
+
+      {/* Yukarı Kaydırıldığında Yeni İleti / Aşağı Kaydır Floating Butonu */}
+      {isScrolledUp && (
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+          <button
+            onClick={scrollToBottom}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold shadow-2xl backdrop-blur-md transition-all cursor-pointer hover:scale-105 active:scale-95 ${
+              hasNewMessage
+                ? "bg-cyan-600 hover:bg-cyan-500 text-white border border-cyan-400/50 animate-bounce"
+                : "bg-gray-800/95 hover:bg-gray-700 text-gray-200 border border-gray-700 shadow-black/50"
+            }`}
+            title="En yeni iletiye kaydır"
+          >
+            <span>{hasNewMessage ? "Yeni İleti" : "Aşağı Kaydır"}</span>
+            <ArrowDown size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Input ve İnteraktif İzin / Devam Et Barları */}
       <div className="border-t border-gray-800/60 p-4 shrink-0 bg-[#0a0b10]">

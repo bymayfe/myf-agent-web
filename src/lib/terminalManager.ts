@@ -37,55 +37,37 @@ export async function killProcessTree(pid: number, signal: NodeJS.Signals = "SIG
   if (!pid || pid <= 1) return false;
 
   try {
-    // 1. Süreç grubu ID'sine sinyal gönder (detached süreçler)
-    try {
-      process.kill(-pid, signal);
-    } catch {
-      // Süreç grubu olmayabilir, yoksay
-    }
-
-    // 2. pkill ile doğrudan ve dolaylı çocuk süreçleri sonlandır
-    try {
-      execSync(`pkill -P ${pid} -${signal === "SIGKILL" ? "9" : "15"} 2>/dev/null || true`);
-    } catch {
-      // yoksay
-    }
-
-    // 3. Ana sürece doğrudan sinyal gönder
-    try {
-      process.kill(pid, signal);
-    } catch {
-      // yoksay
-    }
-
-    // 4. Eğer SIGKILL değilse, kısa süre bekle ve hala hayattaysa SIGKILL ile zorla kapat
-    if (signal !== "SIGKILL") {
-      await new Promise((r) => setTimeout(r, 500));
-      let isAlive = false;
+    // 1. Tüm alt çocuk ve torun PID'leri özyinelemeli olarak topla
+    const allPids: number[] = [pid];
+    const queue = [pid];
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
       try {
-        process.kill(pid, 0);
-        isAlive = true;
+        const out = execSync(`pgrep -P ${curr} 2>/dev/null || true`, { encoding: "utf-8" });
+        const cPids = out.trim().split(/\s+/).map(Number).filter((p) => p > 1 && !allPids.includes(p));
+        for (const cp of cPids) {
+          allPids.push(cp);
+          queue.push(cp);
+        }
       } catch {
-        isAlive = false;
+        // ignore
       }
+    }
 
-      if (isAlive) {
-        try {
-          process.kill(-pid, "SIGKILL");
-        } catch {
-          // yoksay
-        }
-        try {
-          execSync(`pkill -9 -P ${pid} 2>/dev/null || true`);
-        } catch {
-          // yoksay
-        }
-        try {
-          process.kill(pid, "SIGKILL");
-        } catch {
-          // yoksay
-        }
-      }
+    // 2. Çocuklardan ebeveyne doğru önce belirtilen sinyali gönder
+    for (const p of [...allPids].reverse()) {
+      try { process.kill(p, signal); } catch {}
+      try { process.kill(-p, signal); } catch {}
+    }
+
+    // 3. Kısa bekleme sonrası hala yaşayan süreçleri SIGKILL ile zorla sonlandır
+    await new Promise((r) => setTimeout(r, 250));
+    for (const p of allPids) {
+      try {
+        process.kill(p, 0); // Canlı mı?
+        process.kill(p, "SIGKILL");
+        process.kill(-p, "SIGKILL");
+      } catch {}
     }
 
     return true;
@@ -124,6 +106,9 @@ class TerminalManager {
   private tasks: Map<string, TerminalTaskRecord> = new Map();
   private childProcesses: Map<string, ChildProcess> = new Map();
   private listeners: Map<string, Set<(chunk: string) => void>> = new Map();
+  private dismissedTaskIds: Set<string> = new Set();
+  private dismissedPids: Set<number> = new Set();
+  private dismissedPorts: Set<number> = new Set();
 
   constructor() {
     // Başlangıçta sistemdeki yetim dev sunucuları tara
@@ -205,6 +190,13 @@ class TerminalManager {
             (port >= 8000 && port <= 8090);
           if (!isDevPort) continue;
 
+          const taskId = `proc_${pid}_${port}`;
+
+          // Kullanıcı tarafından kapatılmış/silinmişse geri getirme
+          if (this.dismissedTaskIds.has(taskId) || this.dismissedPids.has(pid) || this.dismissedPorts.has(port)) {
+            continue;
+          }
+
           // Zaten kayıtlı mı?
           const alreadyTracked = Array.from(this.tasks.values()).some(
             (t) => t.pid === pid || (t.port === port && t.status === "running")
@@ -226,7 +218,6 @@ class TerminalManager {
           }
 
           const folderName = procCwd ? path.basename(procCwd) : "";
-          const taskId = `proc_${pid}_${port}`;
           const displayCommand = folderName ? `npm run dev [${folderName} :${port}]` : `${cmdline.slice(0, 50)} [:${port}]`;
 
           this.tasks.set(taskId, {
@@ -263,6 +254,11 @@ class TerminalManager {
 
         if (!pid || !port || port === 3111) continue;
 
+        const taskId = `proc_${pid}_${port}`;
+        if (this.dismissedTaskIds.has(taskId) || this.dismissedPids.has(pid) || (port && this.dismissedPorts.has(port))) {
+          continue;
+        }
+
         const alreadyTracked = Array.from(this.tasks.values()).some(
           (t) => t.pid === pid || (t.port === port && t.status === "running")
         );
@@ -282,7 +278,6 @@ class TerminalManager {
           cmdline = cmdName;
         }
 
-        const taskId = `proc_${pid}_${port}`;
         const folderName = procCwd ? path.basename(procCwd) : "";
         const displayCommand = folderName ? `npm run dev [${folderName} :${port}]` : `${cmdline.slice(0, 50)} [:${port}]`;
 
@@ -509,6 +504,14 @@ class TerminalManager {
       await killProcessTree(task.pid, "SIGTERM");
     }
 
+    if (task.port) {
+      try {
+        execSync(`fuser -k -9 ${task.port}/tcp 2>/dev/null || true`);
+      } catch {
+        // ignore
+      }
+    }
+
     const child = this.childProcesses.get(id);
     if (child) {
       try {
@@ -531,11 +534,23 @@ class TerminalManager {
    * Terminal görevini listeden kaldırır (çalışıyorsa önce sonlandırır).
    */
   public async removeTask(id: string): Promise<boolean> {
+    this.dismissedTaskIds.add(id);
     const task = this.tasks.get(id);
-    if (!task) return false;
-
-    if (task.status === "running") {
-      await this.killTask(id);
+    if (task) {
+      if (task.pid) {
+        this.dismissedPids.add(task.pid);
+      }
+      if (task.port) {
+        this.dismissedPorts.add(task.port);
+        try {
+          execSync(`fuser -k -9 ${task.port}/tcp 2>/dev/null || true`);
+        } catch {
+          // ignore
+        }
+      }
+      if (task.status === "running") {
+        await this.killTask(id);
+      }
     }
 
     this.childProcesses.delete(id);
