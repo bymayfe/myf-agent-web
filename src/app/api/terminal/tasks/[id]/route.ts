@@ -1,18 +1,41 @@
 // src/app/api/terminal/tasks/[id]/route.ts
-// Tek bir terminal görevinin canlı çıktısını/durumunu döner (polling ile
-// TerminalPanel'i chat SSE bağlantısından bağımsız olarak besler).
-
 import { NextRequest, NextResponse } from "next/server";
-import { getTask } from "@/lib/plugins/builtins/terminalRegistry";
+import { terminalManager } from "@/lib/terminalManager";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const task = getTask(id);
-  if (!task) {
-    return NextResponse.json({ error: "Görev bulunamadı." }, { status: 404 });
+  try {
+    const { id } = await context.params;
+    const task = terminalManager.getTask(id);
+    if (!task) {
+      return NextResponse.json({ error: "Görev bulunamadı" }, { status: 404 });
+    }
+    return NextResponse.json({ task });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Görev alınamadı", details: String(error) },
+      { status: 500 }
+    );
   }
-  return NextResponse.json({ task });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+    const success = await terminalManager.removeTask(id);
+    return NextResponse.json({ success });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Görev silinemedi", details: String(error) },
+      { status: 500 }
+    );
+  }
 }

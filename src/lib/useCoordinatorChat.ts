@@ -528,6 +528,113 @@ export function useCoordinatorChat(
     [loadHistory, messages, stop]
   );
 
+  const fetchTerminalTasks = useCallback(async () => {
+    try {
+      const res = await fetch("/api/terminal/tasks");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.tasks)) {
+        setTerminalTasks((prev) => {
+          const map = new Map<string, TerminalTask>();
+          for (const t of data.tasks) {
+            map.set(t.id, t);
+          }
+          for (const t of prev) {
+            if (!map.has(t.id)) {
+              map.set(t.id, t);
+            } else {
+              const serverTask = map.get(t.id)!;
+              if (t.output.length > serverTask.output.length) {
+                map.set(t.id, { ...serverTask, output: t.output });
+              }
+            }
+          }
+          const next = Array.from(map.values()).sort(
+            (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
+          );
+          // Eğer veride bir değişiklik yoksa referansı koru (yeniden render/titreme engeli)
+          if (
+            prev.length === next.length &&
+            prev.every((p, i) => {
+              const n = next[i];
+              return (
+                p.id === n.id &&
+                p.status === n.status &&
+                p.port === n.port &&
+                p.output === n.output
+              );
+            })
+          ) {
+            return prev;
+          }
+          return next;
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Düzenli aralıklarla sunucudaki terminal ve yetim dev sunucu durumlarını kontrol et (stabil 3 saniyelik sayaç)
+  useEffect(() => {
+    fetchTerminalTasks();
+    const timer = setInterval(fetchTerminalTasks, 3000);
+    return () => clearInterval(timer);
+  }, [fetchTerminalTasks]);
+
+  const killTerminalTask = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/terminal/tasks/${id}/kill`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.task) {
+          setTerminalTasks((prev) =>
+            prev.map((t) => (t.id === id ? { ...t, ...data.task, status: "stopped" } : t))
+          );
+        } else {
+          setTerminalTasks((prev) =>
+            prev.map((t) => (t.id === id ? { ...t, status: "stopped" } : t))
+          );
+        }
+      }
+      fetchTerminalTasks();
+    } catch (err) {
+      console.error("killTerminalTask hatası:", err);
+    }
+  }, [fetchTerminalTasks]);
+
+  const removeTerminalTask = useCallback(async (id: string) => {
+    try {
+      await fetch(`/api/terminal/tasks/${id}`, { method: "DELETE" });
+      setTerminalTasks((prev) => prev.filter((t) => t.id !== id));
+      if (activeTerminalTaskId === id) {
+        setActiveTerminalTaskId(null);
+      }
+    } catch (err) {
+      console.error("removeTerminalTask hatası:", err);
+    }
+  }, [activeTerminalTaskId]);
+
+  const clearFinishedTerminalTasks = useCallback(async () => {
+    try {
+      const res = await fetch("/api/terminal/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear_finished" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.tasks)) {
+          setTerminalTasks(data.tasks);
+        } else {
+          setTerminalTasks((prev) => prev.filter((t) => t.status === "running"));
+        }
+      }
+    } catch (err) {
+      console.error("clearFinishedTerminalTasks hatası:", err);
+    }
+  }, []);
+
   return {
     messages,
     isStreaming,
@@ -550,5 +657,9 @@ export function useCoordinatorChat(
     undo,
     stop,
     loadHistory,
+    fetchTerminalTasks,
+    killTerminalTask,
+    removeTerminalTask,
+    clearFinishedTerminalTasks,
   };
 }

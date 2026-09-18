@@ -1,16 +1,26 @@
 // src/app/api/terminal/tasks/[id]/kill/route.ts
-// Çalışan bir terminal görevini (örn. takılı kalmış "npm run dev") sonlandırır.
-
 import { NextRequest, NextResponse } from "next/server";
-import { killTask } from "@/lib/plugins/builtins/terminalRegistry";
+import { terminalManager } from "@/lib/terminalManager";
 
 export const runtime = "nodejs";
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const result = killTask(id);
-  return NextResponse.json(result, { status: result.success ? 200 : 400 });
+  try {
+    const { id } = await context.params;
+    const success = await terminalManager.killTask(id);
+    const task = terminalManager.getTask(id);
+
+    return NextResponse.json({
+      success,
+      task,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Süreç durdurulamadı", details: String(error) },
+      { status: 500 }
+    );
+  }
 }

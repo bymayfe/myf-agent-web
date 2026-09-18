@@ -253,6 +253,8 @@ async function callOllamaChat(opts: CallLlmOptions): Promise<string> {
   const decoder = new TextDecoder();
   let buffer = "";
   let fullContent = "";
+  let sawOllamaThinking = false;
+  const parser = createStreamThinkingParser(opts.onToken);
 
   while (true) {
     const { done, value } = await reader.read();
@@ -276,20 +278,33 @@ async function callOllamaChat(opts: CallLlmOptions): Promise<string> {
       const thinkingToken: string = msg.thinking ?? chunk.thinking ?? "";
 
       if (thinkingToken) {
+        sawOllamaThinking = true;
         opts.onToken?.(thinkingToken, "thinking");
       }
 
       if (contentToken) {
-        fullContent += contentToken;
-        opts.onToken?.(contentToken, "content");
+        if (sawOllamaThinking) {
+          fullContent += contentToken;
+          opts.onToken?.(contentToken, "content");
+        } else {
+          parser.feed(contentToken);
+        }
       }
 
       if (chunk.done) {
+        if (!sawOllamaThinking) {
+          parser.flush();
+          fullContent = parser.fullContent;
+        }
         return fullContent.trim();
       }
     }
   }
 
+  if (!sawOllamaThinking) {
+    parser.flush();
+    fullContent = parser.fullContent;
+  }
   return fullContent.trim();
 }
 

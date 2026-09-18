@@ -116,6 +116,10 @@ export default function Home() {
     undo,
     stop,
     loadHistory,
+    fetchTerminalTasks,
+    killTerminalTask,
+    removeTerminalTask,
+    clearFinishedTerminalTasks,
   } = useCoordinatorChat(activeSessionId, {
     onTitleUpdate: refreshSessions,
     onSessionCreated: (newId) => {
@@ -279,13 +283,26 @@ export default function Home() {
   const activeProvider = providers.providers[settings.active_provider];
 
   const runningTasks = terminalTasks.filter((t) => t.status === "running");
+  const lastRunning = runningTasks[runningTasks.length - 1];
   const activeTask =
     runningTasks.length > 0
       ? {
-          command: runningTasks[runningTasks.length - 1].command,
+          command: lastRunning.command,
           count: runningTasks.length,
+          taskId: lastRunning.id,
+          port: lastRunning.port,
+          cwd: lastRunning.cwd,
         }
       : null;
+
+  const livePorts = terminalTasks
+    .filter((t) => t.status === "running" && t.port)
+    .map((t) => ({
+      id: t.id,
+      port: t.port!,
+      command: t.command,
+      cwd: t.cwd,
+    }));
 
   const currentSession = sessions.find((s) => s.session_id === activeSessionId);
   const currentProjectName = currentSession?.project_dir
@@ -336,8 +353,10 @@ export default function Home() {
           permissionRequest={permissionRequest}
           continuePrompt={continuePrompt}
           activeTask={activeTask}
+          livePorts={livePorts}
           onSend={sendMessage}
           onStop={stop}
+          onKillTask={killTerminalTask}
           onContinue={handleContinue}
           onRetry={retry}
           onUndo={undo}
@@ -352,6 +371,10 @@ export default function Home() {
             activeTaskId={activeTerminalTaskId}
             onSelectTask={(id) => setActiveTerminalTaskId(id)}
             onClose={() => setIsTerminalOpen(false)}
+            onKillTask={killTerminalTask}
+            onRemoveTask={removeTerminalTask}
+            onClearFinished={clearFinishedTerminalTasks}
+            onRefresh={fetchTerminalTasks}
           />
         )}
       </div>

@@ -4,6 +4,38 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.4.0] - 2026-09-18
+
+### 🧠 Çok Aşamalı Düşünme Pencereleri ("Düşünce 1, 2, 3...") & Evrensel Sağlayıcı Uyumluluğu
+- **Adımlı ve Ayrık Düşünme Blokları:**
+  - Çok turlu araç döngüsünde (`MAX_TOOL_ITERATIONS`) her akıl yürütme aşaması artık tek bir kutuya yığılmak yerine sırasıyla numaralandırılmış bağımsız paneller halinde sunulur (`Düşünce 1`, `Düşünce 2`, `Düşünce 3`...).
+  - Sürekli aynı düşünme kutusuna metin ekleme (birikme) sorunu giderildi; her düşünce bloğu ilgili araç çağrısının ve eyleminin hemen öncesinde kronolojik olarak gösterilir.
+  - Canlı düşünme esnasında `Düşünce 1 düşünüyor... (2.1s)` sayacı ve son satır önizlemesi her blok için bağımsız çalışır; tamamlandığında satır ve süre bilgisi kilitlenir.
+  - Her düşünce kartı birbirinden bağımsız açılıp kapatılabilir (`İncele` / `Gizle`) ve kendi paneline özel `Kopyala` butonuna sahiptir.
+- **Sıfır Hata & Evrensel Sağlayıcı (Universal Provider) Desteği:**
+  - Ollama (DeepSeek-R1, Qwen reasoning vb.), DeepSeek API, OpenAI (o1/o3), OpenRouter, Moonshot (Kimi), Anthropic ve yerel llama.cpp modelleriyle tam uyumlu.
+  - Akıl yürütme (reasoning) yeteneği olmayan modeller (GPT-4o, Claude 3.5 Sonnet standart, Llama 3) kullanıldığında sistem hiçbir hata vermez; düşünme blokları oluşturulmadan standart metin ve araç akışı pürüzsüz çalışır.
+  - Ollama stream katmanına inline `<think>` fallback ayrıştırıcısı eklendi.
+- **Geçmiş Arındırma (Context Sanitization):**
+  - Çok adımlı döngüde LLM'e geri beslenen asistan geçmişinden `<think>` blokları arındırıldı (`cleanTurnForLlm`). Modelin geçmiş düşünceleri görerek kilitlenmesi veya token israfı yapması engellendi.
+  - Oturum kaydedilirken (`history`) ve oturum tekrar yüklendiğinde düşünce bloklarının kronolojik sırası eksiksiz korunur.
+
+### 🖥️ Antigravity Canlı Terminal, Yetim Dev Server Sahiplenme & Ağaç Süreç Sonlandırıcı
+- **Yetim Dev Sunucusu Tespiti (Orphan Dev Server Adoption):**
+  - Linux `ss -tlpn` socket denetimiyle sistemde arka planda açık kalmış veya web UI dışından başlatılmış dev sunucuları (`npm run dev`, `vite`, `python -m http.server`) taranır; portlar (örn: 3000, 3001, 3002) otomatik olarak terminal yöneticisine kaydedilir.
+- **Güçlü Süreç Ağacı Sonlandırma (`killProcessTree`):**
+  - Next.js ve Vite gibi alt süreç (worker thread/subprocess) doğuran dev sunucularını `pkill -P` ve `SIGTERM` / `SIGKILL` ile kökten temizleyen mekanizma eklendi; portların askıda (zombi) kalması tamamen engellendi.
+- **Terminal Yönetim UI & Sekme Kapatma:**
+  - Terminal paneline çalışan komutları tek tıkla sonlandıran **"Durdur"** butonu ve sekmeleri kapatma (**"X"**) butonu eklendi.
+  - Yeni REST API endpoint'leri: `/api/terminal/tasks`, `/api/terminal/tasks/[id]`, `/api/terminal/tasks/[id]/kill`.
+
+### 🛡️ Sakin ve Sabit Canlı Port Rozeti (Titreme & Blinking Kaldırıldı)
+- **Gürültüsüz Arayüz (Quiet UI):**
+  - Mesaj kutusunun üzerinde sürekli yanıp sönen (`animate-ping`) genel işlem çubuğu kaldırıldı.
+  - Yalnızca aktif dinleyen portlar olduğunda zarif, sakin ve titreşimsiz bir **"Canlı Port: :3000 [X]"** göstergesi sunuldu.
+  - Port rozeti üzerinden çalışan dev server tek tıkla durdurulabilir veya tarayıcıda doğrudan açılabilir.
+  - `useCoordinatorChat` anket mekanizması optimize edildi, gereksiz React yeniden render'ları engellendi.
+
 ## [1.3.0] - 2026-09-17
 
 ### 📦 Web Arama Registry Doğrulama & Squat Koruması

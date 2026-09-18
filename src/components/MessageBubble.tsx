@@ -27,7 +27,7 @@ interface MessageBubbleProps {
 }
 
 type Segment =
-  | { type: "think"; value: string }
+  | { type: "think"; value: string; step?: number }
   | { type: "tool_call"; value: string }
   | { type: "tool_result"; value: string }
   | { type: "code"; value: string; lang: string; filePath?: string }
@@ -37,12 +37,16 @@ function parseSegments(content: string, topThinking?: string): Segment[] {
   const segments: Segment[] = [];
 
   // Eğer topThinking verilmişse ve content içinde hiç <think> yoksa en başa ekle
-  if (topThinking && !content.includes("<think>")) {
-    segments.push({ type: "think", value: topThinking });
+  if (topThinking && !content.includes("<think>") && !content.includes("<thought>")) {
+    if (topThinking.includes("<think>") || topThinking.includes("<thought>")) {
+      content = `${topThinking}\n\n${content}`;
+    } else {
+      segments.push({ type: "think", value: topThinking });
+    }
   }
 
-  // <think>...</think> veya ```lang\n...``` veya açık <think> etiketlerini eşleştir
-  const combinedRe = /<think>([\s\S]*?)(?:<\/think>|$)|```([^\n]*)\n([\s\S]*?)```/g;
+  // <think>...</think> veya <thought>...</thought> veya ```lang\n...``` etiketlerini eşleştir
+  const combinedRe = /<(?:think|thought)>([\s\S]*?)(?:<\/(?:think|thought)>|$)|```([^\n]*)\n([\s\S]*?)```/g;
   let lastIndex = 0;
   let m: RegExpExecArray | null;
 
@@ -53,7 +57,7 @@ function parseSegments(content: string, topThinking?: string): Segment[] {
     }
 
     if (m[1] !== undefined) {
-      // <think>...</think> bloğu
+      // <think>...</think> veya <thought>...</thought> bloğu
       const thinkVal = m[1].trim();
       if (thinkVal) {
         segments.push({ type: "think", value: thinkVal });
@@ -165,16 +169,21 @@ export default function MessageBubble({
               : "text-gray-200"
           }`}
         >
-          {segments.map((seg, i) => {
-            if (seg.type === "think") {
-              return (
-                <ThinkBlock
-                  key={i}
-                  content={seg.value}
-                  isStreaming={isStreaming && i === segments.length - 1}
-                />
-              );
-            }
+          {(() => {
+            let thinkCount = 0;
+            return segments.map((seg, i) => {
+              if (seg.type === "think") {
+                thinkCount++;
+                const currentStep = thinkCount;
+                return (
+                  <ThinkBlock
+                    key={`think_${i}_${currentStep}`}
+                    step={currentStep}
+                    content={seg.value}
+                    isStreaming={isStreaming && i === segments.length - 1}
+                  />
+                );
+              }
 
             if (seg.type === "tool_call") {
               return <ToolCallBlock key={i} rawContent={seg.value} />;
@@ -206,7 +215,8 @@ export default function MessageBubble({
                 )}
               </div>
             );
-          })}
+          });
+        })()}
 
           {/* Eğer henüz hiçbir şey gelmediyse ama yayın devam ediyorsa "Working" veya Canlı Cold-Start uyarısı göster */}
           {!isUser && isStreaming && segments.length === 0 && (

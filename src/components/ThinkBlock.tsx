@@ -6,12 +6,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Brain, ChevronDown, ChevronRight, Copy, Check } from "lucide-react";
 
-interface ThinkBlockProps {
+export interface ThinkBlockProps {
   content: string;
   isStreaming?: boolean;
+  step?: number;
 }
 
-export default function ThinkBlock({ content, isStreaming }: ThinkBlockProps) {
+export default function ThinkBlock({ content, isStreaming, step }: ThinkBlockProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [durationSec, setDurationSec] = useState<number | null>(null);
@@ -73,8 +74,8 @@ export default function ThinkBlock({ content, isStreaming }: ThinkBlockProps) {
           />
           <span className="font-semibold text-purple-200">
             {isStreaming
-              ? `Düşünüyor...${durationSec !== null ? ` (${durationSec.toFixed(1)}s)` : ""}`
-              : `Düşünce Süreci (${durationSec !== null ? `${durationSec.toFixed(1)}s · ` : ""}${lineCount} satır)`}
+              ? `${step ? `Düşünce ${step} düşünüyor...` : "Düşünüyor..."}${durationSec !== null ? ` (${durationSec.toFixed(1)}s)` : ""}`
+              : `${step ? `Düşünce ${step}` : "Düşünce Süreci"} (${durationSec !== null ? `${durationSec.toFixed(1)}s · ` : ""}${lineCount} satır)`}
           </span>
           {isStreaming && !open && lastLine && (
             <span className="text-[10px] text-purple-400/60 truncate max-w-sm hidden sm:inline-block font-sans">

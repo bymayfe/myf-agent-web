@@ -344,6 +344,7 @@ export async function POST(req: NextRequest) {
           let turnThinking = "";
           let firstTokenReceived = false;
           let elapsedSec = 0;
+          let inThinking = false;
 
           // Bulut sağlayıcı gecikme ve cold-start izleyici
           const coldStartTimer = setInterval(() => {
@@ -381,16 +382,36 @@ export async function POST(req: NextRequest) {
                   clearInterval(coldStartTimer);
                   enqueue(sseLine("status", ""));
                 }
-                if (type === "content") {
-                  turnContent += token;
-                } else if (type === "thinking") {
+                if (type === "thinking") {
+                  if (!inThinking) {
+                    inThinking = true;
+                    const openTag = "<think>\n";
+                    turnContent += openTag;
+                    enqueue(sseLine("content", openTag));
+                  }
                   turnThinking += token;
+                  turnContent += token;
+                  enqueue(sseLine("content", token));
+                } else if (type === "content") {
+                  if (inThinking) {
+                    inThinking = false;
+                    const closeTag = "\n</think>\n\n";
+                    turnContent += closeTag;
+                    enqueue(sseLine("content", closeTag));
+                  }
+                  turnContent += token;
+                  enqueue(sseLine("content", token));
                 }
-                enqueue(sseLine(type, token));
               },
             });
           } finally {
             clearInterval(coldStartTimer);
+            if (inThinking) {
+              inThinking = false;
+              const closeTag = "\n</think>\n\n";
+              turnContent += closeTag;
+              enqueue(sseLine("content", closeTag));
+            }
           }
 
           fullText += (fullText ? "\n\n" : "") + turnContent;
@@ -431,9 +452,14 @@ export async function POST(req: NextRequest) {
               );
 
               const cwd = pluginContext.projectDir || process.cwd();
-              toolResult = await runStreamingCommand(cmd, cwd, (chunk) => {
-                enqueue(sseLine("terminal_chunk", { taskId, chunk }));
-              });
+              toolResult = await runStreamingCommand(
+                cmd,
+                cwd,
+                (chunk) => {
+                  enqueue(sseLine("terminal_chunk", { taskId, chunk }));
+                },
+                taskId
+              );
 
               enqueue(
                 sseLine("terminal_task", {
@@ -510,8 +536,9 @@ export async function POST(req: NextRequest) {
             guidance += "\n\n⚠️ DİKKAT: Maksimum araç adımı sınırına yaklaşıyorsun. Bu turda ARTIK BAŞKA ARAÇ ÇAĞIRMA. Şimdiye kadar elde ettiğin bulguları özetle ve kullanıcıya eksiksiz nihai yanıtını sun. Eğer adımlar ve derleme başarıyla tamamlandıysa, projenin çalıştığını açıkça belirt; KESİNLİKLE olmayan hayali hatalar uydurma.";
           }
 
+          const cleanTurnForLlm = turnContent.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
           currentMessages.push(
-            { role: "assistant", content: turnContent },
+            { role: "assistant", content: cleanTurnForLlm || turnContent },
             {
               role: "user",
               content: guidance,
@@ -521,7 +548,8 @@ export async function POST(req: NextRequest) {
 
         // Eğer döngü MAX_TOOL_ITERATIONS ile bittiyse ve model kullanıcıya açık bir yanıt vermemişse,
         // Yarıda kesilmemesi için son bir sentez turu çalıştır: Bulguları, yapılanları veya hataları özetlesin!
-        const hasSubstantialText = fullText.replace(/```[\s\S]*?```/g, "").trim().length > 50;
+        const cleanFullText = fullText.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/```[\s\S]*?```/g, "").trim();
+        const hasSubstantialText = cleanFullText.length > 50;
         if (!hasSubstantialText && iteration >= MAX_TOOL_ITERATIONS) {
           enqueue(sseLine("status", "📝 Nihai değerlendirme ve özet hazırlanıyor..."));
           let finalTurnContent = "";
@@ -637,7 +665,8 @@ export async function POST(req: NextRequest) {
         }
 
         // ── 10. Not ekle ──────────────────────────────────────────────────
-        const firstSentence = fullText.split(/[.!?\n]/)[0]?.trim();
+        const cleanForNote = fullText.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+        const firstSentence = cleanForNote.split(/[.!?\n]/)[0]?.trim();
         if (firstSentence && firstSentence.length > 20 && firstSentence.length < 200) {
           addEvent(actGroup, makeNoteEvent(firstSentence));
         }

@@ -16,12 +16,30 @@ import {
   Plus,
   Mic,
   ArrowUp,
+  Terminal as TerminalIcon,
+  ExternalLink,
+  X,
 } from "lucide-react";
 import MessageBubble from "./MessageBubble";
 import PermissionPrompt, { PermissionRequest, PermissionDecision } from "./PermissionPrompt";
 import ContinuePrompt from "./ContinuePrompt";
 import SlashCommandMenu, { SLASH_COMMANDS, SlashCommand } from "./SlashCommandMenu";
 import type { UiMessage } from "@/lib/useCoordinatorChat";
+
+export interface LivePortInfo {
+  id: string;
+  port: number;
+  command: string;
+  cwd?: string;
+}
+
+export interface ActiveTaskInfo {
+  command: string;
+  count: number;
+  taskId?: string;
+  port?: number;
+  cwd?: string;
+}
 
 interface ChatPanelProps {
   messages: UiMessage[];
@@ -33,9 +51,11 @@ interface ChatPanelProps {
   onSelectModel?: (modelId: string) => void;
   permissionRequest?: PermissionRequest | null;
   continuePrompt?: { visible: boolean; message: string } | null;
-  activeTask?: { command: string; count: number } | null;
+  activeTask?: ActiveTaskInfo | null;
+  livePorts?: LivePortInfo[];
   onSend: (text: string) => void;
   onStop: () => void;
+  onKillTask?: (id: string) => void;
   onContinue?: () => void;
   onRetry?: (index?: number) => void;
   onUndo?: (index?: number) => void;
@@ -57,8 +77,10 @@ export default function ChatPanel({
   permissionRequest,
   continuePrompt,
   activeTask,
+  livePorts,
   onSend,
   onStop,
+  onKillTask,
   onContinue,
   onRetry,
   onUndo,
@@ -203,22 +225,51 @@ export default function ChatPanel({
       {/* Input ve İnteraktif İzin / Devam Et Barları */}
       <div className="border-t border-gray-800/60 p-4 shrink-0 bg-[#0a0b10]">
         <div className="max-w-4xl mx-auto flex flex-col gap-2">
-          {/* Antigravity Tarzı Canlı Görev Barı (1 task running) */}
-          {activeTask && (
-            <div
-              onClick={onOpenTerminal}
-              className="cursor-pointer flex items-center justify-between px-3.5 py-2 rounded-xl bg-[#10121a] border border-amber-600/40 text-amber-300 text-xs font-mono shadow-lg hover:border-amber-500 transition-all animate-in fade-in"
-            >
-              <div className="flex items-center gap-2 truncate">
-                <Loader2 size={13} className="animate-spin text-amber-400 shrink-0" />
-                <span className="font-semibold text-white">
-                  {activeTask.count > 1 ? `${activeTask.count} tasks running:` : "1 task running:"}
-                </span>
-                <span className="truncate text-amber-200/80">$ {activeTask.command}</span>
+          {/* Canlı Port Gösterimi (Blinking yok, sade, stabil) */}
+          {livePorts && livePorts.length > 0 && (
+            <div className="flex items-center justify-between px-3.5 py-1.5 rounded-xl bg-[#0b0f19] border border-cyan-800/70 text-xs font-mono shadow-sm gap-3">
+              <div className="flex items-center gap-2 truncate min-w-0 flex-1">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+                <span className="text-gray-400 text-[11px] shrink-0 font-sans">Canlı Port:</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {livePorts.map((lp) => (
+                    <div
+                      key={lp.id}
+                      className="flex items-center gap-1.5 bg-cyan-950/90 border border-cyan-700/60 rounded-lg px-2 py-0.5"
+                    >
+                      <a
+                        href={`http://localhost:${lp.port}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-cyan-300 hover:text-cyan-100 font-semibold flex items-center gap-1 hover:underline"
+                        title={`http://localhost:${lp.port} adresini tarayıcıda aç`}
+                      >
+                        <span>localhost:{lp.port}</span>
+                        <ExternalLink size={10} />
+                      </a>
+                      {onKillTask && (
+                        <button
+                          onClick={() => onKillTask(lp.id)}
+                          className="text-gray-400 hover:text-red-400 p-0.5 transition-colors"
+                          title={`Port ${lp.port} sürecini durdur ve kapat`}
+                        >
+                          <X size={11} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center gap-1 text-[11px] text-amber-400/80 shrink-0 ml-2">
-                <span>Terminali Aç</span>
-                <ChevronUp size={13} />
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={onOpenTerminal}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-800/90 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] transition-colors border border-gray-700/80"
+                  title="Terminal panelini aç"
+                >
+                  <TerminalIcon size={12} className="text-amber-400" />
+                  <span>Terminal</span>
+                </button>
               </div>
             </div>
           )}

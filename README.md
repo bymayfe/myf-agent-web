@@ -72,9 +72,11 @@ Web arayüzü, 5 aşamalı otonom yazılım geliştirme pipeline'ını (**Archit
 
 ## Mimari notları
 
-- `src/lib/llmClient.ts` — Ollama NDJSON streaming + OpenAI-uyumlu SSE, tek arayüz.
-- `src/lib/coordinator.ts` — sistem promptu, onay/iptal kısa-devre tespiti, pipeline marker.
+- `src/lib/llmClient.ts` — Ollama NDJSON streaming + OpenAI-uyumlu SSE, tek arayüz. Çoklu sağlayıcı (Ollama, DeepSeek, OpenAI, OpenRouter, Anthropic, Moonshot, llama.cpp) evrensel düşünme/akıl yürütme ayrıştırıcısı.
+- `src/lib/terminalManager.ts` — Canlı shell komut yönetimi, `ss -tlpn` ile açık portları tarayıp dev sunucularını otomatik sahiplenme, `killProcessTree` (`pkill -P`) ile zombi süreçleri kökten sonlandırma.
+- `src/lib/coordinator.ts` — sistem promptu, onay/iptal kısa-devre tespiti, 14 turlu otonom araç döngüsü ve bağlam arındırma (`cleanTurnForLlm`).
 - `src/lib/store.ts` — dosya tabanlı JSON kalıcılık (settings/providers/sessions).
 - `src/app/api/pipeline/route.ts` — Python `pipeline_bridge.py` canlı SSE bağlantısı ve TS fallback motoru.
+- `src/app/api/terminal/tasks/*` — Terminal görevleri ve alt süreçleri izleme, sonlandırma (`/kill`) REST API'leri.
 - `src/app/api/*` — Next.js Route Handler'lar, `runtime = "nodejs"` (fs erişimi için).
-- UI: `ThinkBlock` (düşünme paneli), `CodeBlock` (Shiki syntax highlight), glassmorphism tema.
+- UI: `ThinkBlock` (sıralı "Düşünce 1, 2, 3..." pencereleri, bağımsız sayaç ve kopyalama), `ChatPanel` (sakin ve titreşimsiz Canlı Port çubuğu), `CodeBlock` (Shiki syntax highlight), glassmorphism tema.
