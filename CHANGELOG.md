@@ -26,6 +26,16 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 - **Ayarlar Modalı Koruması (`SettingsModal.tsx`):**
   - Modal kapalıyken arka plandaki ayar değişikliklerinin `setDraft` tetikleyerek React render sınırını aşması (`if (!open) return`) engellendi.
 
+### 🛡️ Terminal Sekmesi Kapatma Kalıcılığı & Çalışan İşlem Uyarı Modalı
+- **Kapanıp Tekrar Açılma Sorunu (Dirilme Bug'ı) Kökten Çözüldü:**
+  - `removeTerminalTask` çalıştırıldığında görevin yalnızca yerel React state'ten değil, `sessionStore.current` içindeki tüm oturum önbelleklerinden ve sunucu tarafındaki `TerminalManager` görev havuzundan temizlenmesi sağlandı.
+  - `dismissedTaskIds` listesi `localStorage` (`myf_dismissed_terminal_tasks`) üzerinde kalıcı kılındı; sayfa yenilense veya canlı SSE akışı sürse dahi kapatılan görevlerin geri dirilmesi engellendi.
+  - `TerminalManager` singleton örneği (`globalThis.terminalManager`) modül yeniden yüklemelerinde sıfırlanmayacak şekilde korundu.
+  - ANSI renk kodları (`stripAnsi`) temizlenerek port tespitinin kusursuz çalışması sağlandı; bir görev silindiğinde o porta bağlı yetim süreçler ve dev sunucular anında temizlenir.
+- **Çalışan İşlem Kapatma Uyarı Modalı (`TerminalPanel.tsx`):**
+  - Aktif çalışan bir terminal görevi (`status === "running"`) kapatılmak istendiğinde kazara veri/işlem kaybını önlemek için onay diyaloğu eklendi.
+  - Kullanıcıya işlemin sonlandırılacağı ve portun serbest bırakılacağı açıkça bildirilir; "İşlemi Sonlandır ve Kapat" veya "Vazgeç" seçenekleri sunulur.
+
 ## [1.5.0] - 2026-09-18
 
 ### 🛑 Terminal Görev Sekmelerinin Kesin Kapatılması & Portların Serbest Bırakılması

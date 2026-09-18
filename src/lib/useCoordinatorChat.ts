@@ -87,6 +87,18 @@ export function useCoordinatorChat(
   const dismissedTaskIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem("myf_dismissed_terminal_tasks");
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          arr.forEach((id: string) => dismissedTaskIdsRef.current.add(id));
+        }
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
     currentSessionIdRef.current = sessionId;
   }, [sessionId]);
 
@@ -111,8 +123,14 @@ export function useCoordinatorChat(
   const syncActiveView = useCallback((state: SessionRuntimeState) => {
     setMessages([...state.messages.map((m) => ({ ...m }))]);
     setIsStreaming(state.isStreaming);
-    setTerminalTasks([...state.terminalTasks]);
-    setActiveTerminalTaskId(state.activeTerminalTaskId);
+    setTerminalTasks(
+      state.terminalTasks.filter((t) => !dismissedTaskIdsRef.current.has(t.id))
+    );
+    setActiveTerminalTaskId(
+      state.activeTerminalTaskId && !dismissedTaskIdsRef.current.has(state.activeTerminalTaskId)
+        ? state.activeTerminalTaskId
+        : null
+    );
     setActivityGroups([...state.activityGroups]);
     setContinuePrompt(state.continuePrompt ? { ...state.continuePrompt } : null);
     setPermissionRequest(state.permissionRequest ? { ...state.permissionRequest } : null);
@@ -215,18 +233,22 @@ export function useCoordinatorChat(
               optionsRef.current?.onTitleUpdate?.(data.sessionId, data.title);
             } else if (frame.event === "terminal_task") {
               const task = frame.data as TerminalTask;
-              const idx = st.terminalTasks.findIndex((t) => t.id === task.id);
-              if (idx >= 0) st.terminalTasks[idx] = task;
-              else st.terminalTasks.push(task);
-              st.activeTerminalTaskId = task.id;
+              if (!dismissedTaskIdsRef.current.has(task.id)) {
+                const idx = st.terminalTasks.findIndex((t) => t.id === task.id);
+                if (idx >= 0) st.terminalTasks[idx] = task;
+                else st.terminalTasks.push(task);
+                st.activeTerminalTaskId = task.id;
+              }
             } else if (frame.event === "terminal_chunk") {
               const { taskId, chunk } = frame.data as { taskId: string; chunk: string };
-              const idx = st.terminalTasks.findIndex((t) => t.id === taskId);
-              if (idx >= 0) {
-                st.terminalTasks[idx] = {
-                  ...st.terminalTasks[idx],
-                  output: st.terminalTasks[idx].output + chunk,
-                };
+              if (!dismissedTaskIdsRef.current.has(taskId)) {
+                const idx = st.terminalTasks.findIndex((t) => t.id === taskId);
+                if (idx >= 0) {
+                  st.terminalTasks[idx] = {
+                    ...st.terminalTasks[idx],
+                    output: st.terminalTasks[idx].output + chunk,
+                  };
+                }
               }
             } else if (frame.event === "done") {
               st.isStreaming = false;
@@ -537,18 +559,22 @@ export function useCoordinatorChat(
                 startPipelineExecution(isGeneric(userReq) ? prompt : userReq);
               } else if (frame.event === "terminal_task") {
                 const task = frame.data as TerminalTask;
-                const idx = st.terminalTasks.findIndex((t) => t.id === task.id);
-                if (idx >= 0) st.terminalTasks[idx] = task;
-                else st.terminalTasks.push(task);
-                st.activeTerminalTaskId = task.id;
+                if (!dismissedTaskIdsRef.current.has(task.id)) {
+                  const idx = st.terminalTasks.findIndex((t) => t.id === task.id);
+                  if (idx >= 0) st.terminalTasks[idx] = task;
+                  else st.terminalTasks.push(task);
+                  st.activeTerminalTaskId = task.id;
+                }
               } else if (frame.event === "terminal_chunk") {
                 const { taskId, chunk } = frame.data as { taskId: string; chunk: string };
-                const idx = st.terminalTasks.findIndex((t) => t.id === taskId);
-                if (idx >= 0) {
-                  st.terminalTasks[idx] = {
-                    ...st.terminalTasks[idx],
-                    output: st.terminalTasks[idx].output + chunk,
-                  };
+                if (!dismissedTaskIdsRef.current.has(taskId)) {
+                  const idx = st.terminalTasks.findIndex((t) => t.id === taskId);
+                  if (idx >= 0) {
+                    st.terminalTasks[idx] = {
+                      ...st.terminalTasks[idx],
+                      output: st.terminalTasks[idx].output + chunk,
+                    };
+                  }
                 }
               } else if (frame.event === "done") {
                 st.isStreaming = false;
@@ -658,17 +684,23 @@ export function useCoordinatorChat(
       if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data.tasks)) {
+        const serverTasks: TerminalTask[] = data.tasks.filter(
+          (t: TerminalTask) => !dismissedTaskIdsRef.current.has(t.id)
+        );
+
         setTerminalTasks((prev) => {
           const map = new Map<string, TerminalTask>();
-          for (const t of data.tasks) {
-            if (!dismissedTaskIdsRef.current.has(t.id)) {
-              map.set(t.id, t);
-            }
+          for (const t of serverTasks) {
+            map.set(t.id, t);
           }
+
+          // Yalnızca yerel olarak hala çalışır durumda olan ve henüz sunucuya yansımamış görevleri koru
           for (const t of prev) {
             if (dismissedTaskIdsRef.current.has(t.id)) continue;
             if (!map.has(t.id)) {
-              map.set(t.id, t);
+              if (t.status === "running") {
+                map.set(t.id, t);
+              }
             } else {
               const serverTask = map.get(t.id)!;
               if (t.output.length > serverTask.output.length) {
@@ -676,10 +708,18 @@ export function useCoordinatorChat(
               }
             }
           }
+
           const next = Array.from(map.values()).sort(
             (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
           );
-          // Eğer veride bir değişiklik yoksa referansı koru (yeniden render/titreme engeli)
+
+          // Aktif oturum state'ini de senkronize et (syncActiveView eski görevleri geri getiremez)
+          const currentId = currentSessionIdRef.current;
+          if (currentId && sessionStore.current.has(currentId)) {
+            sessionStore.current.get(currentId)!.terminalTasks = next;
+          }
+
+          // Eğer veride bir değişiklik yoksa referansı koru (titreme engeli)
           if (
             prev.length === next.length &&
             prev.every((p, i) => {
@@ -733,10 +773,25 @@ export function useCoordinatorChat(
   const removeTerminalTask = useCallback(async (id: string) => {
     try {
       dismissedTaskIdsRef.current.add(id);
+      try {
+        const list = Array.from(dismissedTaskIdsRef.current).slice(-200);
+        localStorage.setItem("myf_dismissed_terminal_tasks", JSON.stringify(list));
+      } catch {}
+
+      // Yerel state'ten kaldır
       setTerminalTasks((prev) => prev.filter((t) => t.id !== id));
       if (activeTerminalTaskId === id) {
         setActiveTerminalTaskId(null);
       }
+
+      // sessionStore içindeki TÜM oturum kayıtlarından da sil
+      for (const st of sessionStore.current.values()) {
+        st.terminalTasks = st.terminalTasks.filter((t) => t.id !== id);
+        if (st.activeTerminalTaskId === id) {
+          st.activeTerminalTaskId = null;
+        }
+      }
+
       await fetch(`/api/terminal/tasks/${id}`, { method: "DELETE" });
     } catch (err) {
       console.error("removeTerminalTask hatası:", err);
@@ -745,6 +800,11 @@ export function useCoordinatorChat(
 
   const clearFinishedTerminalTasks = useCallback(async () => {
     try {
+      setTerminalTasks((prev) => prev.filter((t) => t.status === "running"));
+      for (const st of sessionStore.current.values()) {
+        st.terminalTasks = st.terminalTasks.filter((t) => t.status === "running");
+      }
+
       const res = await fetch("/api/terminal/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -753,9 +813,11 @@ export function useCoordinatorChat(
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.tasks)) {
-          setTerminalTasks(data.tasks);
-        } else {
-          setTerminalTasks((prev) => prev.filter((t) => t.status === "running"));
+          const filtered = data.tasks.filter((t: TerminalTask) => !dismissedTaskIdsRef.current.has(t.id));
+          setTerminalTasks(filtered);
+          for (const st of sessionStore.current.values()) {
+            st.terminalTasks = filtered;
+          }
         }
       }
     } catch (err) {

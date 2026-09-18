@@ -77,10 +77,17 @@ export async function killProcessTree(pid: number, signal: NodeJS.Signals = "SIG
   }
 }
 
+function stripAnsi(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "");
+}
+
 /**
  * Çıktı metninden port numarasını yakalar (3000, 3001, 8080 vb.)
  */
 export function extractPortFromText(text: string): number | undefined {
+  if (!text) return undefined;
+  const clean = stripAnsi(text);
   const patterns = [
     /(?:localhost|127\.0\.0\.1):(\d{2,5})/i,
     /port\s*[:=]?\s*(\d{2,5})/i,
@@ -88,10 +95,11 @@ export function extractPortFromText(text: string): number | undefined {
     /listening\s+on\s+.*:(\d{2,5})/i,
     /local:\s+http:\/\/.*:(\d{2,5})/i,
     /network:\s+http:\/\/.*:(\d{2,5})/i,
+    /:(\d{4,5})\b/i,
   ];
 
   for (const regex of patterns) {
-    const match = text.match(regex);
+    const match = clean.match(regex);
     if (match && match[1]) {
       const p = parseInt(match[1], 10);
       if (p > 1024 && p < 65535 && p !== 3111) {
@@ -536,20 +544,46 @@ class TerminalManager {
   public async removeTask(id: string): Promise<boolean> {
     this.dismissedTaskIds.add(id);
     const task = this.tasks.get(id);
+    const detectedPort =
+      task?.port ||
+      (task ? extractPortFromText(task.command) : undefined) ||
+      (task ? extractPortFromText(task.output) : undefined);
+
     if (task) {
       if (task.pid) {
         this.dismissedPids.add(task.pid);
-      }
-      if (task.port) {
-        this.dismissedPorts.add(task.port);
         try {
-          execSync(`fuser -k -9 ${task.port}/tcp 2>/dev/null || true`);
+          const out = execSync(`pgrep -P ${task.pid} 2>/dev/null || true`, { encoding: "utf-8" });
+          for (const line of out.trim().split("\n")) {
+            const p = parseInt(line.trim(), 10);
+            if (p) this.dismissedPids.add(p);
+          }
         } catch {
           // ignore
         }
       }
+
+      if (detectedPort) {
+        this.dismissedPorts.add(detectedPort);
+        try {
+          execSync(`fuser -k -9 ${detectedPort}/tcp 2>/dev/null || true`);
+        } catch {
+          // ignore
+        }
+      }
+
       if (task.status === "running") {
         await this.killTask(id);
+      }
+    }
+
+    // Aynı port veya PID'ye bağlı yetim veya ilişkili diğer görevleri de temizle
+    if (detectedPort) {
+      for (const [tId, t] of this.tasks.entries()) {
+        if (t.port === detectedPort || tId.endsWith(`_${detectedPort}`)) {
+          this.tasks.delete(tId);
+          this.dismissedTaskIds.add(tId);
+        }
       }
     }
 
@@ -567,11 +601,13 @@ class TerminalManager {
         this.tasks.delete(id);
         this.listeners.delete(id);
         this.childProcesses.delete(id);
+        this.dismissedTaskIds.add(id);
       }
     }
   }
 }
 
 const globalForTerminal = globalThis as unknown as { terminalManager?: TerminalManager };
-export const terminalManager = new TerminalManager();
+export const terminalManager: TerminalManager =
+  globalForTerminal.terminalManager ?? new TerminalManager();
 globalForTerminal.terminalManager = terminalManager;

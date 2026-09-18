@@ -16,6 +16,7 @@ import {
   Minimize2,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Loader2,
   Square,
   ExternalLink,
@@ -58,7 +59,16 @@ export default function TerminalPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [taskToClose, setTaskToClose] = useState<TerminalTask | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleRequestClose = (task: TerminalTask) => {
+    if (task.status === "running") {
+      setTaskToClose(task);
+    } else {
+      onRemoveTask?.(task.id);
+    }
+  };
 
   // Aktif görevi seç
   useEffect(() => {
@@ -178,7 +188,7 @@ export default function TerminalPanel({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onRemoveTask(task.id);
+                      handleRequestClose(task);
                     }}
                     className="p-0.5 rounded text-gray-500 hover:text-red-400 hover:bg-gray-700/60 opacity-60 group-hover:opacity-100 transition-opacity"
                     title="Sekmeyi Kapat"
@@ -297,7 +307,7 @@ export default function TerminalPanel({
             {/* SEKME KAPAT BUTONU */}
             {onRemoveTask && (
               <button
-                onClick={() => onRemoveTask(activeTask.id)}
+                onClick={() => handleRequestClose(activeTask)}
                 className="p-1 rounded text-gray-400 hover:text-gray-200 hover:bg-gray-800 transition-colors"
                 title="Bu Terminal Sekmesini Kapat"
               >
@@ -326,6 +336,55 @@ export default function TerminalPanel({
           <span className="text-gray-600">(Seçili görev yok)</span>
         )}
       </div>
+
+      {/* Çalışan Terminal Görevini Kapatma Onay Modalı */}
+      {taskToClose && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in p-4">
+          <div className="glass-modal w-full max-w-sm rounded-2xl border border-red-500/40 bg-[#0c101c] p-5 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-950/80 border border-red-700/60 flex items-center justify-center shrink-0 text-red-400">
+                <AlertTriangle size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-white">Çalışan İşlemi Kapat</h3>
+                <p className="text-xs text-gray-400 mt-0.5 truncate font-mono">
+                  {taskToClose.command}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-red-950/30 border border-red-800/40 p-3 text-xs text-red-200 leading-relaxed">
+              ⚠️ <strong>Dikkat:</strong> Bu terminalde aktif olarak çalışan bir işlem var!
+              <div className="mt-1.5 text-red-300/90 text-[11px]">
+                Bu sekmeyi kapatırsanız işlem sonlandırılacak ve kullanılan port{taskToClose.port ? ` (:${taskToClose.port})` : ""} serbest bırakılacaktır.
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={() => setTaskToClose(null)}
+                className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-medium text-gray-300 transition-colors"
+              >
+                Vazgeç
+              </button>
+              <button
+                onClick={() => {
+                  const target = taskToClose;
+                  setTaskToClose(null);
+                  if (target) {
+                    if (onKillTask) onKillTask(target.id);
+                    if (onRemoveTask) onRemoveTask(target.id);
+                  }
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-xs font-semibold text-white transition-colors flex items-center gap-1.5 shadow-lg shadow-red-900/40"
+              >
+                <Square size={11} className="fill-white" />
+                <span>İşlemi Sonlandır ve Kapat</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
