@@ -36,6 +36,11 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
   - Aktif çalışan bir terminal görevi (`status === "running"`) kapatılmak istendiğinde kazara veri/işlem kaybını önlemek için onay diyaloğu eklendi.
   - Kullanıcıya işlemin sonlandırılacağı ve portun serbest bırakılacağı açıkça bildirilir; "İşlemi Sonlandır ve Kapat" veya "Vazgeç" seçenekleri sunulur.
 
+### 🧪 Kokpit Geliştirme Ortamı İzolasyonu (Turbopack & Dev Server Sızıntı Koruması)
+- **Alt Projelere `TURBOPACK` ve `__NEXT_DEV_SERVER` Sızıntısı Engellendi:**
+  - Web UI (Kokpit) Next.js geliştirme modunda çalışırken `process.env` üzerinde oluşan `TURBOPACK`, `__NEXT_DEV_SERVER`, `NEXT_RUNTIME` ve `NEXT_PRIVATE_*` ortam değişkenlerinin alt projelerdeki shell/terminal komutlarına (`childEnv`) sızması engellendi.
+  - Alt projelerdeki `npm run build` komutlarının çakışma yaşamadan tamamen saf ve bağımsız bir ortamda derlenmesi sağlandı.
+
 ## [1.5.0] - 2026-09-18
 
 ### 🛑 Terminal Görev Sekmelerinin Kesin Kapatılması & Portların Serbest Bırakılması

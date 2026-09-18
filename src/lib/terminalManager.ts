@@ -387,7 +387,23 @@ class TerminalManager {
         DEBIAN_FRONTEND: "noninteractive",
         FORCE_COLOR: "1",
       };
-      delete childEnv.PORT; // Web UI 3111 portunun alt projeye sızmasını önle
+      // Web UI (Next.js Kokpit) geliştirme ortam değişkenlerinin alt projelere sızmasını kesinlikle engelle
+      delete childEnv.PORT;
+      delete childEnv.TURBOPACK;
+      delete childEnv.__NEXT_DEV_SERVER;
+      delete childEnv.NEXT_RUNTIME;
+      delete childEnv.NEXT_PRIVATE_WORKER;
+      delete childEnv.NEXT_PRIVATE_START_TIME;
+      delete childEnv.NEXT_PRIVATE_TRACE_ID;
+      delete childEnv.NEXT_PRIVATE_ENABLED_FEATURES;
+      delete childEnv.NEXT_PRIVATE_DEV_SPAN_ATTRS;
+      delete childEnv.__NEXT_PRIVATE_PREVIEW_MODE;
+      delete childEnv.__NEXT_PROCESSED_ENV;
+      for (const key of Object.keys(childEnv)) {
+        if (key.startsWith("NEXT_PRIVATE_") || key.startsWith("__NEXT_") || key.startsWith("NEXT_TURBOPACK")) {
+          delete childEnv[key];
+        }
+      }
 
       const taskRecord: TerminalTaskRecord = {
         id,
