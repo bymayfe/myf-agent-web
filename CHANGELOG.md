@@ -45,11 +45,11 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
   - Modal kapalıyken arka plandaki ayar değişikliklerinin `setDraft` tetikleyerek React render sınırını aşması (`if (!open) return`) engellendi.
 
 ### 🛡️ Terminal Sekmesi Kapatma Kalıcılığı & Çalışan İşlem Uyarı Modalı
-- **Kapanıp Tekrar Açılma Sorunu (Dirilme Bug'ı) Kökten Çözüldü:**
+- **Kapatılan Sekmelerin Yeniden Açılması Sorunu Giderildi:**
   - `removeTerminalTask` çalıştırıldığında görevin yalnızca yerel React state'ten değil, `sessionStore.current` içindeki tüm oturum önbelleklerinden ve sunucu tarafındaki `TerminalManager` görev havuzundan temizlenmesi sağlandı.
-  - `dismissedTaskIds` listesi `localStorage` (`myf_dismissed_terminal_tasks`) üzerinde kalıcı kılındı; sayfa yenilense veya canlı SSE akışı sürse dahi kapatılan görevlerin geri dirilmesi engellendi.
+  - `dismissedTaskIds` listesi `localStorage` (`myf_dismissed_terminal_tasks`) üzerinde kalıcı kılındı; sayfa yenilense veya canlı SSE akışı sürse dahi kapatılan görevlerin tekrar açılması engellendi.
   - `TerminalManager` singleton örneği (`globalThis.terminalManager`) modül yeniden yüklemelerinde sıfırlanmayacak şekilde korundu.
-  - ANSI renk kodları (`stripAnsi`) temizlenerek port tespitinin kusursuz çalışması sağlandı; bir görev silindiğinde o porta bağlı yetim süreçler ve dev sunucular anında temizlenir.
+  - ANSI renk kodları (`stripAnsi`) temizlenerek port tespitinin kusursuz çalışması sağlandı; bir görev silindiğinde o porta bağlı arka plan süreçleri ve dev sunucuları anında temizlenir.
 - **Çalışan İşlem Kapatma Uyarı Modalı (`TerminalPanel.tsx`):**
   - Aktif çalışan bir terminal görevi (`status === "running"`) kapatılmak istendiğinde kazara veri/işlem kaybını önlemek için onay diyaloğu eklendi.
   - Kullanıcıya işlemin sonlandırılacağı ve portun serbest bırakılacağı açıkça bildirilir; "İşlemi Sonlandır ve Kapat" veya "Vazgeç" seçenekleri sunulur.
@@ -102,19 +102,19 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
   - Çok adımlı döngüde LLM'e geri beslenen asistan geçmişinden `<think>` blokları arındırıldı (`cleanTurnForLlm`). Modelin geçmiş düşünceleri görerek kilitlenmesi veya token israfı yapması engellendi.
   - Oturum kaydedilirken (`history`) ve oturum tekrar yüklendiğinde düşünce bloklarının kronolojik sırası eksiksiz korunur.
 
-### 🖥️ Antigravity Canlı Terminal, Yetim Dev Server Sahiplenme & Ağaç Süreç Sonlandırıcı
-- **Yetim Dev Sunucusu Tespiti (Orphan Dev Server Adoption):**
-  - Linux `ss -tlpn` socket denetimiyle sistemde arka planda açık kalmış veya web UI dışından başlatılmış dev sunucuları (`npm run dev`, `vite`, `python -m http.server`) taranır; portlar (örn: 3000, 3001, 3002) otomatik olarak terminal yöneticisine kaydedilir.
-- **Güçlü Süreç Ağacı Sonlandırma (`killProcessTree`):**
-  - Next.js ve Vite gibi alt süreç (worker thread/subprocess) doğuran dev sunucularını `pkill -P` ve `SIGTERM` / `SIGKILL` ile kökten temizleyen mekanizma eklendi; portların askıda (zombi) kalması tamamen engellendi.
+### 🖥️ Canlı Terminal: Açık Dev Sunucularını Devralma & Süreç Ağacı Sonlandırma
+- **Arka Plandaki Dev Sunucularının Otomatik Keşfi (Orphan Adoption):**
+  - Linux `ss -tlpn` socket denetimiyle sistemde arka planda açık kalmış veya web UI dışından başlatılmış dev sunucuları (`npm run dev`, `vite`, `python -m http.server`) taranır; ilgili portlar (örn: 3000, 3001, 3002) otomatik olarak terminal yöneticisine devralınarak bağlanır.
+- **Kapsamlı Süreç Ağacı Sonlandırma (`killProcessTree`):**
+  - Next.js ve Vite gibi alt süreç (worker thread/subprocess) doğuran dev sunucularını `pkill -P` ve `SIGTERM` / `SIGKILL` ile hiyerarşik olarak temizleyen mekanizma eklendi; portların askıda kalması ve zombi süreçler tamamen engellendi.
 - **Terminal Yönetim UI & Sekme Kapatma:**
   - Terminal paneline çalışan komutları tek tıkla sonlandıran **"Durdur"** butonu ve sekmeleri kapatma (**"X"**) butonu eklendi.
   - Yeni REST API endpoint'leri: `/api/terminal/tasks`, `/api/terminal/tasks/[id]`, `/api/terminal/tasks/[id]/kill`.
 
-### 🛡️ Sakin ve Sabit Canlı Port Rozeti (Titreme & Blinking Kaldırıldı)
-- **Gürültüsüz Arayüz (Quiet UI):**
+### 🛡️ Göz Yormayan Sabit Canlı Port Rozeti (Titreşim ve Yanıp Sönme Kaldırıldı)
+- **Sadeleştirilmiş Arayüz (Minimal UI):**
   - Mesaj kutusunun üzerinde sürekli yanıp sönen (`animate-ping`) genel işlem çubuğu kaldırıldı.
-  - Yalnızca aktif dinleyen portlar olduğunda zarif, sakin ve titreşimsiz bir **"Canlı Port: :3000 [X]"** göstergesi sunuldu.
+  - Yalnızca aktif dinleyen portlar olduğunda zarif ve titreşimsiz sabit bir **"Canlı Port: :3000 [X]"** göstergesi sunuldu.
   - Port rozeti üzerinden çalışan dev server tek tıkla durdurulabilir veya tarayıcıda doğrudan açılabilir.
   - `useCoordinatorChat` anket mekanizması optimize edildi, gereksiz React yeniden render'ları engellendi.
 
