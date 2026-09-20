@@ -49,23 +49,23 @@ export async function runArchitectStage(
     message: "Proje gereksinimleri analiz ediliyor ve dosya yapısı planlanıyor...",
   });
 
-  const prompt = `Sen kıdemli bir yazılım mimarısın. Aşağıdaki proje isteği için eksiksiz bir mimari tasarım ve oluşturulacak dosyaların JSON listesini hazırla.
+  const prompt = `You are a senior software architect. Analyze the project requirements below and prepare a complete architectural design and a JSON list of files to create.
 
-PROJE İSTEĞİ:
+PROJECT REQUIREMENTS:
 ${requirement}
 
-LÜTFEN SADECE VE SADECE AŞAĞIDAKİ JSON FORMATINDA ÇIKTI ÜRET (Markdown veya ek metin ekleme):
+OUTPUT FORMAT: Return ONLY a valid JSON object matching the following structure (no markdown fences, no conversational text):
 {
-  "summary": "Projenin kısa mimari özeti ve teknoloji yığını",
+  "summary": "Brief architectural summary and technology stack",
   "files": [
     {
       "filename": "package.json",
-      "description": "Proje bağımlılıkları ve scriptleri",
+      "description": "Project dependencies and scripts",
       "language": "json"
     },
     {
       "filename": "src/app/page.tsx",
-      "description": "Ana dashboard bileşeni",
+      "description": "Main dashboard component",
       "language": "typescript"
     }
   ]
@@ -76,7 +76,7 @@ LÜTFEN SADECE VE SADECE AŞAĞIDAKİ JSON FORMATINDA ÇIKTI ÜRET (Markdown vey
 
   await callLlm({
     messages: [
-      { role: "system", content: "Sen kıdemli bir sistem mimarısın. Sadece geçerli JSON çıktısı üretirsin." },
+      { role: "system", content: "You are a senior systems architect. You output only valid JSON without explanation." },
       { role: "user", content: prompt },
     ],
     model: options.settings.planning_model || options.settings.coordinator_model,
@@ -101,16 +101,16 @@ LÜTFEN SADECE VE SADECE AŞAĞIDAKİ JSON FORMATINDA ÇIKTI ÜRET (Markdown vey
   } catch {
     // Fallback dosya listesi
     parsed = {
-      summary: "Uygulama temel bileşenleri ve yapılandırması",
+      summary: "Core application components and configuration",
       files: [
-        { filename: "README.md", description: "Proje dökümantasyonu", language: "markdown" },
-        { filename: "src/app/page.tsx", description: "Ana Sayfa Bileşeni", language: "typescript" },
+        { filename: "README.md", description: "Project documentation", language: "markdown" },
+        { filename: "src/app/page.tsx", description: "Main page component", language: "typescript" },
       ],
     };
   }
 
   const plannedFiles = parsed.files && parsed.files.length > 0 ? parsed.files : [
-    { filename: "README.md", description: "Proje kılavuzu", language: "markdown" }
+    { filename: "README.md", description: "Project documentation", language: "markdown" }
   ];
 
   options.onEvent({
@@ -158,22 +158,22 @@ export async function runDeveloperStage(
       message: `[${i + 1}/${plannedFiles.length}] ${file.filename} yazılıyor...`,
     });
 
-    const filePrompt = `Sen uzman bir tam-yığın (full-stack) yazılımcısın.
-Mimari Özeti: ${architectureSummary}
+    const filePrompt = `You are an expert full-stack software engineer.
+Architecture Summary: ${architectureSummary}
 
-GÖREV: Aşağıdaki dosyanın TAM ve EKSİKSİZ kaynak kodunu üret.
-Hedef Dosya: ${file.filename}
-Açıklama: ${file.description}
+TASK: Generate the COMPLETE and WORKING source code for the file specified below.
+Target File: ${file.filename}
+Description: ${file.description}
 
-ÖNEMLİ KURALLAR:
-1. Asla "// kodlar buraya", "TODO", "kısaltma yapıldı" gibi yer tutucular BIRAKMA.
-2. Tüm importları, tipleri, mantığı ve fonksiyonları tam olarak yaz.
-3. Çıktıyı doğrudan \`\`\`${file.language || "text"}\\n// filepath: ${file.filename}\\n[KODLAR]\\n\`\`\` bloğu içinde ver.`;
+IMPORTANT RULES:
+1. NEVER leave placeholders such as "// code goes here", "TODO", or truncated implementations.
+2. Write all imports, types, logic, and functions completely.
+3. Output the code directly inside a \`\`\`${file.language || "text"}\\n// filepath: ${file.filename}\\n[CODE]\\n\`\`\` block.`;
 
     let fileContent = "";
     await callLlm({
       messages: [
-        { role: "system", content: "Sen profesyonel bir yazılım geliştiricisin. Eksiksiz ve hatasız kod üretirsin." },
+        { role: "system", content: "You are a professional software developer. You generate complete, production-ready, defect-free code." },
         { role: "user", content: filePrompt },
       ],
       model: options.settings.code_model || options.settings.coordinator_model,
