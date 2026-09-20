@@ -4,6 +4,20 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.10.0] - 2026-09-20
+
+### 🛡️ Kısır Döngü Kırıcı (Hard Loop Breaker), Expo/Metro Algılama & Alt Klasör Dosya Yönlendirme
+- **Sert Döngü Kırıcı (Hard Loop Breaker) (`route.ts`):**
+  - Modelin aynı araç ve parametre kombinasyonunu art arda çağırması durumunda, 2. tekrarda araç çalıştırması engellenerek otonom döngü anında kırıldı (`break`).
+  - İlk tekrarda modele Türkçe sonuç üretmesi için zorunlu uyarı yönergesi enjekte edildi.
+- **Expo, React Native ve Vite Canlı Sunucu Tespiti (`terminalManager.ts`):**
+  - `expo start`, `npx expo start`, `react-native start`, `vite` komutları dev server listesine eklendi.
+  - Metro Bundler hazır sinyalleri (`Metro is running`, `Logs for your project will appear`, vb.) algılandığında portu kilitlemeden test sürecini başarıyla sonlandıran otomatik mekanizma devreye alındı.
+- **Akıllı Alt Proje Dosya Yönlendiricisi (`route.ts`):**
+  - Scaffolding komutları (örn. `npx create-expo-app`) ile açılan alt klasörlerdeki `package.json` yapısı otomatik algılanarak, modelin ürettiği `App.tsx` ve `src/...` kodlarının kök yerine doğru alt proje klasörüne kaydedilmesi sağlandı.
+- **Pipeline Promptlarının İngilizceye Taşınması (`pipelineRunner.ts`):**
+  - Mimar ve Geliştirici aşamalarında LLM'e iletilen iç promptlar ve kurallar İngilizceye uyarlandı, UI olayları Türkçe tutuldu.
+
 ## [1.9.0] - 2026-09-20
 
 ### 🌐 Sistem Promptlarının İngilizceye Taşınması & Türkçe Çıktı Kuralı
