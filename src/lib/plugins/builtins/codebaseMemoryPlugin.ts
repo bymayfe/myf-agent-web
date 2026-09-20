@@ -23,6 +23,27 @@ Use 'search_graph', 'trace_path', 'get_architecture', and 'get_code_snippet' to 
 
   tools: [
     {
+      name: "list_projects",
+      displayName: "List Indexed Projects",
+      description: "Lists all indexed projects in codebase-memory-mcp knowledge graph.",
+      parameters: {},
+      execute: async () => {
+        if (await codebaseMemoryClient.isAvailable()) {
+          const res = await codebaseMemoryClient.listProjects();
+          if (res) {
+            return {
+              success: true,
+              output: res,
+            };
+          }
+        }
+        return {
+          success: false,
+          output: JSON.stringify({ error: "Codebase Memory MCP servisi çalışmıyor veya proje listesi boş." }, null, 2),
+        };
+      },
+    },
+    {
       name: "search_graph",
       displayName: "Search Symbol/Function in Graph",
       description: "Searches functions, classes, routes, or variables in the Codebase Memory knowledge graph.",
@@ -44,7 +65,7 @@ Use 'search_graph', 'trace_path', 'get_architecture', and 'get_code_snippet' to 
           if (mcpResult) {
             return {
               success: true,
-              output: `[Codebase Memory MCP Results]:\n${mcpResult}`,
+              output: mcpResult,
             };
           }
         }
@@ -95,7 +116,7 @@ Use 'search_graph', 'trace_path', 'get_architecture', and 'get_code_snippet' to 
           if (res) {
             return {
               success: true,
-              output: `[MCP Call Graph (${symbol} - ${dir})]:\n${res}`,
+              output: res,
             };
           }
         }
@@ -149,7 +170,7 @@ Use 'search_graph', 'trace_path', 'get_architecture', and 'get_code_snippet' to 
           if (res) {
             return {
               success: true,
-              output: `[Codebase Memory MCP Architecture Graph]:\n${res}`,
+              output: res,
             };
           }
         }
@@ -177,7 +198,7 @@ Use 'search_graph', 'trace_path', 'get_architecture', and 'get_code_snippet' to 
           if (res) {
             return {
               success: true,
-              output: `[Codebase Memory MCP Architecture]:\n${res}`,
+              output: res,
             };
           }
         }

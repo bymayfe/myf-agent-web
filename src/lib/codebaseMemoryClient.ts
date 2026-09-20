@@ -205,6 +205,11 @@ class CodebaseMemoryClient {
     return result ? JSON.stringify(result, null, 2) : null;
   }
 
+  /** İndeksli tüm projeleri listele */
+  public async listProjects(): Promise<string | null> {
+    return this.callTool("list_projects", {});
+  }
+
   /** Projeyi bilgi grafiğine indeksle */
   public async indexRepository(projectDir: string): Promise<string | null> {
     return this.callTool("index_repository", { repo_path: projectDir, mode: "fast" }, 30000);

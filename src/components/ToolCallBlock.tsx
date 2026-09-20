@@ -97,15 +97,90 @@ export default function ToolCallBlock({ rawContent, isResult }: ToolCallBlockPro
 
   // ── 1. Terminal Çıktısı (Tool Result) ──
   if (isResult) {
+    const cleanContent = rawContent.trim();
+    let isJson = false;
+    let formattedJson = "";
+
+    // MCP veya Codebase Memory öneklerini temizle
+    const mcpMatch = cleanContent.match(/^(?:\[(?:Codebase Memory MCP Results|MCP[^\]]*)\]:?\s*)?([\s\S]*)$/i);
+    const candidate = mcpMatch ? mcpMatch[1].trim() : cleanContent;
+
+    if (
+      (candidate.startsWith("{") && candidate.endsWith("}")) ||
+      (candidate.startsWith("[") && candidate.endsWith("]"))
+    ) {
+      try {
+        const parsed = JSON.parse(candidate);
+        formattedJson = JSON.stringify(parsed, null, 2);
+        isJson = true;
+      } catch {
+        isJson = false;
+      }
+    }
+
     const isError =
-      rawContent.toLowerCase().includes("hata") ||
-      rawContent.toLowerCase().includes("error") ||
-      rawContent.includes("STDERR") ||
-      rawContent.includes("failed") ||
-      rawContent.includes("fatal:");
+      cleanContent.toLowerCase().includes("hata") ||
+      cleanContent.toLowerCase().includes("error") ||
+      cleanContent.includes("STDERR") ||
+      cleanContent.includes("failed") ||
+      cleanContent.includes("fatal:");
+
+    const renderJsonLines = (jsonStr: string) => {
+      const lines = jsonStr.split("\n");
+      return (
+        <div className="font-mono text-[11px] leading-relaxed">
+          {lines.map((line, idx) => {
+            const keyMatch = line.match(/^(\s*)("([^"]+)")(\s*:\s*)(.*)$/);
+            if (keyMatch) {
+              const indent = keyMatch[1];
+              const key = keyMatch[3];
+              const colon = keyMatch[4];
+              const val = keyMatch[5];
+
+              let valElem = <span className="text-gray-300">{val}</span>;
+              if (val.startsWith('"')) {
+                valElem = <span className="text-emerald-400">{val}</span>;
+              } else if (val === "true" || val === "false") {
+                valElem = <span className="text-amber-400 font-semibold">{val}</span>;
+              } else if (/^-?\d+(\.\d+)?/.test(val)) {
+                valElem = <span className="text-cyan-400">{val}</span>;
+              } else if (val === "null") {
+                valElem = <span className="text-gray-500 italic">null</span>;
+              }
+
+              return (
+                <div key={idx} className="hover:bg-white/[0.02] px-1 -mx-1 rounded">
+                  <span>{indent}</span>
+                  <span className="text-rose-400 font-medium">"{key}"</span>
+                  <span className="text-gray-400">{colon}</span>
+                  {valElem}
+                </div>
+              );
+            }
+
+            const strMatch = line.match(/^(\s*)("([^"]+)"(,)?)$/);
+            if (strMatch) {
+              return (
+                <div key={idx} className="hover:bg-white/[0.02] px-1 -mx-1 rounded">
+                  <span>{strMatch[1]}</span>
+                  <span className="text-emerald-400">"{strMatch[3]}"</span>
+                  {strMatch[4] && <span className="text-gray-400">,</span>}
+                </div>
+              );
+            }
+
+            return (
+              <div key={idx} className="text-gray-400 hover:bg-white/[0.02] px-1 -mx-1 rounded">
+                {line}
+              </div>
+            );
+          })}
+        </div>
+      );
+    };
 
     return (
-      <div className="my-2 rounded-xl border border-gray-800 bg-[#0c0d12] overflow-hidden text-xs shadow-lg font-mono">
+      <div className="my-2 rounded-xl border border-gray-800/80 bg-[#0c0d12] overflow-hidden text-xs shadow-lg font-mono">
         <div className="flex items-center justify-between px-3 py-2 bg-[#12131a] border-b border-gray-800">
           <div className="flex items-center gap-2 text-gray-300">
             {isError ? (
@@ -113,20 +188,32 @@ export default function ToolCallBlock({ rawContent, isResult }: ToolCallBlockPro
             ) : (
               <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
             )}
-            <span className="text-[11px] text-gray-400">Çıktı</span>
+            <span className="text-[11px] font-medium text-gray-300">
+              {isJson ? "Tool Output" : "Çıktı"}
+            </span>
+            {isJson && (
+              <span className="px-1.5 py-0.5 rounded bg-purple-950/40 border border-purple-800/40 text-[10px] text-purple-300 font-sans">
+                codebase-memory-mcp
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
+            {isJson && (
+              <span className="text-[10px] text-gray-500 font-mono px-1 font-semibold">
+                json
+              </span>
+            )}
             <button
-              onClick={() => handleCopy(rawContent)}
-              className="text-gray-400 hover:text-gray-200 transition-colors"
+              onClick={() => handleCopy(isJson ? formattedJson : rawContent)}
+              className="text-gray-400 hover:text-gray-200 transition-colors p-1 hover:bg-gray-800/50 rounded"
               title="Kopyala"
             >
               {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
             </button>
             <button
               onClick={() => setOpen((v) => !v)}
-              className="text-gray-400 hover:text-gray-200"
+              className="text-gray-400 hover:text-gray-200 p-1 hover:bg-gray-800/50 rounded"
             >
               {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
             </button>
@@ -134,8 +221,12 @@ export default function ToolCallBlock({ rawContent, isResult }: ToolCallBlockPro
         </div>
 
         {open && (
-          <div className="p-3 text-gray-300 text-[11px] leading-relaxed whitespace-pre-wrap overflow-x-auto max-h-72 bg-[#090a0f] select-text">
-            {rawContent}
+          <div className="p-3 text-gray-300 text-[11px] leading-relaxed overflow-x-auto max-h-80 bg-[#090a0f] select-text">
+            {isJson ? (
+              renderJsonLines(formattedJson)
+            ) : (
+              <div className="whitespace-pre-wrap">{rawContent}</div>
+            )}
           </div>
         )}
       </div>
