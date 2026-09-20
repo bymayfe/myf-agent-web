@@ -590,6 +590,12 @@ async function runBackgroundSessionTask(params: {
         guidance += "\n\n⚠️ UYARI: Bu aracı ve parametreleri az önce zaten çalıştırdın! Aynı dosyayı veya aracı tekrar çağırma. Elde ettiğin verileri kullanarak hemen kodu düzelt veya kullanıcıya bulgularını sunarak görevi tamamla.";
       }
 
+      const readOnlyTools = new Set(["list_directory", "get_codebase_summary", "search_symbols", "git_status"]);
+      const allReadOnly = toolCalls.every((c) => readOnlyTools.has(c.tool));
+      if (allReadOnly && iteration >= 2) {
+        guidance += "\n\n🚨 KRİTİK TALİMAT: Dizin boş veya incelenecek dosya yok. Boş dizini inceleme araçlarıyla tekrar tekrar taramayı DERHAL BIRAK! Kullanıcı senden yeni bir proje veya kod yazmanı istiyor. Hemen gerekli kurulum komutunu ('run_command') çalıştır veya dosyaları ('write_file' / kod bloğu) eksiksiz oluşturmaya başla.";
+      }
+
       if (iteration >= MAX_TOOL_ITERATIONS - 1) {
         guidance += "\n\n⚠️ DİKKAT: Maksimum araç adımı sınırına yaklaşıyorsun. Bu turda ARTIK BAŞKA ARAÇ ÇAĞIRMA. Şimdiye kadar elde ettiğin bulguları özetle ve kullanıcıya eksiksiz nihai yanıtını sun. Eğer adımlar ve derleme başarıyla tamamlandıysa, projenin çalıştığını açıkça belirt; KESİNLİKLE olmayan hayali hatalar uydurma.";
       }

@@ -39,7 +39,7 @@ Aktif projedeki git durumunu, değiştirilen dosyaları veya geçmiş commit'ler
         } catch {
           return {
             success: true,
-            output: "Bu proje dizininde henüz Git başlatılmamış (Git deposu değil). Proje yapısını ve durumunu incelemek için 'get_codebase_summary', 'search_symbols' veya 'list_directory' araçlarını kullanabilirsin.",
+            output: "Bu dizinde henüz Git deposu başlatılmamış. Dizin boşsa inceleme araçlarını tekrar çağırma; doğrudan kullanıcının istediği projeyi ve dosyaları oluşturmaya başla.",
           };
         }
       },

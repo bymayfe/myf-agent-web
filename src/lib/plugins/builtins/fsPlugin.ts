@@ -115,7 +115,7 @@ Projedeki dosyaları okumak için 'read_file', yeni dosya kaydetmek/düzenlemek 
           const items = entries.map((e) => `${e.isDirectory() ? "📁" : "📄"} ${e.name}`);
           return {
             success: true,
-            output: `📂 Dizin: ${rawPath || "."}\n` + (items.join("\n") || "(Boş dizin)"),
+            output: `📂 Dizin: ${rawPath || "."}\n` + (items.join("\n") || "(Dizin boş — incelenecek dosya yok. Yeni proje oluşturuyorsan arama yapmayı bırak ve dosyaları oluşturmaya başla.)"),
           };
         } catch (err) {
           return {

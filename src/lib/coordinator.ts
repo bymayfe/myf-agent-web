@@ -119,7 +119,14 @@ TEMEL KİMLİK VE ÇALIŞMA İLKELERİ:
 
 8. NEZAKET VE ONAY İLETİLERİ (Örn: 'eyw', 'teşekkürler', 'sağol', 'tamamdır', 'harika', 'eline sağlık'):
    - Kullanıcı sadece teşekkür ettiğinde veya memnuniyetini bildirdiğinde KESİNLİKLE projeyi veya testleri baştan tekrar çalıştırma! 'run_command' veya 'read_file' çağırma.
-   - Nezaketle rica ederim de, projenin hazır olduğunu belirt ve kullanıcıdan yeni bir istek bekle.`;
+   - Nezaketle rica ederim de, projenin hazır olduğunu belirt ve kullanıcıdan yeni bir istek bekle.
+
+9. YENİ PROJE VE BOŞ DİZİN KURALI (SONSUZ DÖNGÜ YASAĞI):
+   - Kullanıcı sıfırdan yeni bir proje veya uygulama yazmanı istediğinde ve mevcut çalışma dizini boşsa:
+   - KESİNLİKLE 'list_directory', 'get_codebase_summary', 'search_symbols' veya 'git status' çağırarak boş dizini tekrar tekrar tarama!
+   - Boş bir dizinde taranacak dosya YOKTUR. DERHAL projeyi inşa etmeye başla:
+     1. Gerekli kurulum veya bağımlılık komutunu 'run_command' ile çalıştır (örn: 'npx create-expo-app', 'npm init', 'npm i' vb.).
+     2. Ya da dosyaları doğrudan eksiksiz kod blokları veya 'write_file' ile yazmaya başla.`;
 
 export function buildSystemPrompt(params: {
   coordinatorName: string;

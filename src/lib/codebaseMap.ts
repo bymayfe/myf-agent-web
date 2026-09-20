@@ -162,7 +162,7 @@ export async function buildCodebaseMap(projectDir: string): Promise<CodebaseMap>
 /** Kompakt proje haritasını LLM sistem promptuna enjekte edilecek formata dönüştür.
  *  Token tasarrufu için semboller satır-inline gösterilir. */
 export function formatMapForLLM(map: CodebaseMap, maxFiles = 60): string {
-  if (map.fileCount === 0) return "(Proje henüz boş veya taranmadı)";
+  if (map.fileCount === 0) return "(Proje henüz boş — incelenecek dosya veya sembol yok. Yeni proje oluşturuyorsan arama yapmayı bırak ve doğrudan dosyaları yazmaya başla.)";
 
   const lines: string[] = [
     `=== PROJE KOD HARİTASI (${map.fileCount} dosya · ${map.totalLines.toLocaleString()} satır) ===`,
