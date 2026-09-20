@@ -412,18 +412,36 @@ async function runBackgroundSessionTask(params: {
       let elapsedSec = 0;
       let inThinking = false;
 
+      const isLocal =
+        Boolean(
+          provider.api_base?.toLowerCase().includes("localhost") ||
+          provider.api_base?.toLowerCase().includes("127.0.0.1") ||
+          provider.api_base?.toLowerCase().includes(":8080") ||
+          provider.api_base?.toLowerCase().includes(":11434") ||
+          provider.api_base?.toLowerCase().includes(":1234") ||
+          provider.label?.toLowerCase().includes("lokal")
+        );
+
       const coldStartTimer = setInterval(() => {
         if (firstTokenReceived) {
           clearInterval(coldStartTimer);
           return;
         }
         elapsedSec += 2;
-        if (elapsedSec >= 4 && elapsedSec < 10) {
-          emit("status", `⏳ Sağlayıcıya bağlanıldı, yanıt hazırlanıyor (${elapsedSec}s)...`);
-        } else if (elapsedSec >= 10 && elapsedSec < 22) {
-          emit("status", `🚀 Model uyandırılıyor (Cold-Start / Kuyruk bekleniyor - ${elapsedSec}s)...`);
-        } else if (elapsedSec >= 22) {
-          emit("status", `⏳ Bulut sağlayıcı kuyruğu yoğun (${elapsedSec}s), lütfen bekleyin...`);
+        if (isLocal) {
+          if (elapsedSec >= 4 && elapsedSec < 10) {
+            emit("status", `🧠 Yerel model promptu işliyor (${elapsedSec}s)...`);
+          } else if (elapsedSec >= 10) {
+            emit("status", `⚡ Yerel model yanıtı hazırlıyor (${elapsedSec}s)...`);
+          }
+        } else {
+          if (elapsedSec >= 4 && elapsedSec < 10) {
+            emit("status", `⏳ Sağlayıcıya bağlanıldı, yanıt hazırlanıyor (${elapsedSec}s)...`);
+          } else if (elapsedSec >= 10 && elapsedSec < 22) {
+            emit("status", `🚀 Model uyandırılıyor (Cold-Start / Kuyruk bekleniyor - ${elapsedSec}s)...`);
+          } else if (elapsedSec >= 22) {
+            emit("status", `⏳ Bulut sağlayıcı kuyruğu yoğun (${elapsedSec}s), lütfen bekleyin...`);
+          }
         }
       }, 2000);
 

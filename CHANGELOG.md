@@ -4,6 +4,13 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.11.0] - 2026-09-20
+
+### ⚡ Yerel Model (llama.cpp / Ollama) Durum Tespiti & Akıllı Timer
+- **Yerel Model Tespiti & Durum Bildirimleri (`route.ts`):**
+  - Sağlayıcı `api_base` adresinin yerel (`localhost`, `127.0.0.1`, `8080`, `11434`, `1234`) veya `llama_cpp`, `ollama`, `lm_studio` olup olmadığı tespit edildi.
+  - Yerel modellerde yanıltıcı olan "Bulut sağlayıcı kuyruğu yoğun" ve "Cold-Start" mesajları engellendi; yerine `🧠 Yerel model promptu işliyor...` ve `⚡ Yerel model yanıtı hazırlıyor...` anlık durum güncellemeleri entegre edildi.
+
 ## [1.10.0] - 2026-09-20
 
 ### 🛡️ Kısır Döngü Kırıcı (Hard Loop Breaker), Expo/Metro Algılama & Alt Klasör Dosya Yönlendirme
