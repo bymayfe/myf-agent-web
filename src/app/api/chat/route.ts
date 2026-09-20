@@ -494,6 +494,15 @@ async function runBackgroundSessionTask(params: {
         break;
       }
 
+      const recentCallsSig = toolCalls.map(c => `${c.tool}:${JSON.stringify(c.parameters)}`).join("|");
+      const repeatCount = previousCallsHistory.filter(h => h === recentCallsSig).length;
+      previousCallsHistory.push(recentCallsSig);
+
+      if (repeatCount >= 2) {
+        emit("status", "🛑 Kısır döngü önlendi: Model aynı araç çağrılarını art arda tekrarladığı için döngü güvenle kırıldı.");
+        break;
+      }
+
       emit("status", `🔧 [Adım ${iteration}] ${toolCalls.length} eklenti aracı çalıştırılıyor...`);
 
       const toolResults: string[] = [];
@@ -576,18 +585,14 @@ async function runBackgroundSessionTask(params: {
       // Her araç grubu tamamlandığında diske durum kaydet
       await persistTurn();
 
-      const recentCallsSig = toolCalls.map(c => `${c.tool}:${JSON.stringify(c.parameters)}`).join("|");
-      const isLooping = previousCallsHistory.filter(h => h === recentCallsSig).length >= 2;
-      previousCallsHistory.push(recentCallsSig);
-
       emit("status", "🤖 Araç çıktıları inceleniyor ve sonraki adıma geçiliyor...");
 
       let guidance = "Tools were executed successfully and outputs were streamed to the user.\n\n" +
         `Tool Summaries:\n${toolResults.join("\n\n")}\n\n` +
         "IMPORTANT: Do not waste tokens re-copying terminal or file outputs. Based directly on this result, either run the next command/tool, or produce complete code and your final response in fluent Turkish.";
 
-      if (isLooping) {
-        guidance += "\n\n⚠️ WARNING: You already executed this exact tool with these parameters! Do not call the same file or tool again. Use the data you already obtained to immediately fix code or complete the task for the user.";
+      if (repeatCount >= 1) {
+        guidance += "\n\n⚠️ CRITICAL WARNING: You already executed this exact tool with these parameters! DO NOT call the same file or command again. If you were testing or reading a file, that step is complete. Now write the complete code, explanations, and your final response for the user in fluent Turkish.";
       }
 
       const readOnlyTools = new Set(["list_directory", "get_codebase_summary", "search_symbols", "git_status"]);
@@ -677,9 +682,35 @@ async function runBackgroundSessionTask(params: {
     }
 
     editedFiles = [];
+    let effectiveProjectSubdir = "";
+    try {
+      const rootPkg = path.join(projectDir, "package.json");
+      let hasRootPkg = false;
+      try {
+        await fs.access(rootPkg);
+        hasRootPkg = true;
+      } catch {}
+
+      if (!hasRootPkg) {
+        const entries = await fs.readdir(projectDir, { withFileTypes: true });
+        const subDirs = entries.filter((e) => e.isDirectory() && !e.name.startsWith("."));
+        for (const sd of subDirs) {
+          try {
+            await fs.access(path.join(projectDir, sd.name, "package.json"));
+            effectiveProjectSubdir = sd.name;
+            break;
+          } catch {}
+        }
+      }
+    } catch {}
+
     for (const f of extractedFiles) {
       try {
-        const targetPath = path.isAbsolute(f.path) ? f.path : path.join(projectDir, f.path);
+        let filePathToUse = f.path;
+        if (effectiveProjectSubdir && !f.path.startsWith(effectiveProjectSubdir + "/")) {
+          filePathToUse = path.join(effectiveProjectSubdir, f.path);
+        }
+        const targetPath = path.isAbsolute(f.path) ? f.path : path.join(projectDir, filePathToUse);
         let oldContent = "";
         try {
           oldContent = await fs.readFile(targetPath, "utf-8");
@@ -687,7 +718,7 @@ async function runBackgroundSessionTask(params: {
           oldContent = "";
         }
 
-        const diffResult = computeFileDiff(f.path, oldContent, f.content);
+        const diffResult = computeFileDiff(filePathToUse, oldContent, f.content);
 
         await fs.mkdir(path.dirname(targetPath), { recursive: true });
         await fs.writeFile(targetPath, f.content, "utf-8");

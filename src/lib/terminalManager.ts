@@ -463,8 +463,18 @@ class TerminalManager {
         }
 
         // Eğer sadece test amaçlı çalıştırılıyorsa ve sunucu hazırlandıysa kilitlenmeyi önle
-        const isDevServer = /\b(npm\s+run\s+dev|next\s+dev|npm\s+start|npx\s+nodemon|yarn\s+dev|pnpm\s+dev)\b/.test(processedCmd);
-        if (autoKillDevServerOnReady && isDevServer && (taskRecord.output.includes("Ready in") || taskRecord.output.includes("Local:") || taskRecord.output.includes("http://localhost"))) {
+        const isDevServer = /\b(npm\s+run\s+dev|next\s+dev|npm\s+start|npx\s+nodemon|yarn\s+dev|pnpm\s+dev|expo\s+start|npx\s+expo\s+start|react-native\s+start|vite)\b/i.test(processedCmd);
+        const isDevServerReady =
+          taskRecord.output.includes("Ready in") ||
+          taskRecord.output.includes("Local:") ||
+          taskRecord.output.includes("http://localhost") ||
+          taskRecord.output.includes("Metro is running") ||
+          taskRecord.output.includes("Logs for your project will appear") ||
+          taskRecord.output.includes("Waiting on exp://") ||
+          taskRecord.output.includes("Web is waiting on") ||
+          taskRecord.output.includes("Android Bundling complete");
+
+        if (autoKillDevServerOnReady && isDevServer && isDevServerReady) {
           setTimeout(async () => {
             if (!isResolved) {
               isResolved = true;
