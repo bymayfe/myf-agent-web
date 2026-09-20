@@ -397,7 +397,7 @@ async function runBackgroundSessionTask(params: {
 
     // ── 7. Çok Adımlı Otonom Ajan Döngüsü (Multi-Step Agent Loop) ───
     const requestedMaxTokens = settings.max_tokens ? Math.max(settings.max_tokens, 8192) : 8192;
-    let currentMessages: ChatMessage[] = [...messages];
+    const currentMessages: ChatMessage[] = [...messages];
     const MAX_TOOL_ITERATIONS = 14;
     let iteration = 0;
     const previousCallsHistory: string[] = [];

@@ -88,9 +88,7 @@ export async function GET(req: NextRequest) {
   }
 
   const prefix = provConfig.model_prefix ? `${provConfig.model_prefix}/` : "";
-  const availableModels = (provConfig as Record<string, unknown>).available_models as
-    | Record<string, { size?: string; context_window?: number; description?: string }>
-    | undefined;
+  const availableModels = provConfig.available_models;
 
   let models: ModelOption[];
 

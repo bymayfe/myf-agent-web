@@ -4,41 +4,9 @@
 
 import type { ChatMessage, ExecutionMode } from "@/types";
 
-const APPROVAL_WORDS = new Set([
-  "onayla",
-  "onayladim",
-  "onayliyorum",
-  "onay",
-  "baslat",
-  "go",
-  "proceed",
-  "start",
-]);
-
-const CANCEL_WORDS = new Set(["iptal", "dur", "cancel", "stop", "hayir", "vazgec"]);
-
-const SHORT_APPROVALS = new Set([
-  "evet",
-  "başla",
-  "basla",
-  "tamam",
-  "hadi",
-  "onay",
-  "ok",
-  "onaylıyorum",
-  "onayliyorum",
-  "devam et",
-]);
-
-function wordsOf(text: string): Set<string> {
-  return new Set((text.trim().toLowerCase().match(/\b\w+\b/g) ?? []));
-}
-
-function matches(text: string, set: Set<string>): boolean {
-  const w = wordsOf(text);
-  for (const s of set) if (w.has(s)) return true;
-  return false;
-}
+// NOT: Eski onay/iptal kelime listeleri kaldırıldı; gerçek onay/iptal tespiti
+// artık aşağıdaki preEvaluateUserInput() içinde ve route.ts'deki
+// "/run", "/start", "##pipeline_start##" kontrolünde yapılıyor.
 
 export function extractPipelineMarker(text: string): string | null {
   const m = /##PIPELINE_START##\n?([\s\S]*?)(?:##PIPELINE_END##|$)/.exec(text);
@@ -78,6 +46,9 @@ const AGENT_SYSTEM_PROMPT = (params: {
   executionMode: ExecutionMode;
 }) => `Sen Google Antigravity, Claude Code ve Cursor seviyesinde doğrudan çalışan, tam yetkili uzman bir otonom yazılım mühendisisin (AI Agent). Adın: ${params.name}.
 BUGÜNÜN GÜNCEL TARİHİ: ${params.currentDate}
+
+AKTİF ÇALIŞMA MODU:
+${buildAgentListBlock(params.executionMode)}
 
 ${params.projectContext}
 

@@ -17,7 +17,11 @@ export default function ThinkBlock({ content, isStreaming, step }: ThinkBlockPro
   const [copied, setCopied] = useState(false);
   const [durationSec, setDurationSec] = useState<number | null>(null);
 
-  const startRef = useRef<number>(Date.now());
+  // NOT: Başlangıç değeri olarak Date.now() çağırmak render sırasında saf
+  // olmayan bir işlem sayılır (React purity kuralı). Gerçek başlangıç zamanı
+  // zaten aşağıdaki effect'te (isStreaming true olduğunda) atanıyor, bu yüzden
+  // burada zararsız bir placeholder (0) yeterli.
+  const startRef = useRef<number>(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {

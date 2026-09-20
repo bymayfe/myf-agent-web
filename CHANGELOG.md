@@ -4,6 +4,16 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.8.0] - 2026-09-20
+
+### 🛡️ Sistem Promptu Mod Entegrasyonu & TypeScript Tip Güvenliği
+- **Çalışma Modunun LLM Sistem Promptuna Entegrasyonu (`coordinator.ts`):**
+  - Ayarlar panelinde seçilen çalışma modunun (`sequential`, `subagent`, `interactive`) `buildAgentListBlock` aracılığıyla sistem promptuna dinamik olarak enjekte edilmesi sağlandı; model hangi modda çalıştığını doğrudan bilir.
+- **TypeScript Tip Güvenliği & React Kuralları:**
+  - `ProviderConfig` ve `ModelOption` arayüzlerine `available_models` ve `context_window` alanları eklenerek `tsc --noEmit` sıfır hatayla derlendi.
+  - `ThinkBlock.tsx` içerisindeki saf olmayan `Date.now()` çağrısı `useRef(0)` ile güvenli hale getirildi.
+  - `coordinator.ts` içindeki kullanılmayan eski onay kelime listeleri temizlendi.
+
 ## [1.7.0] - 2026-09-18
 
 ### 🤖 Yeni Yerel GGUF Modelleri & llama.cpp Dinamik Model Desteği (Web UI)

@@ -54,6 +54,12 @@ export interface ProviderAgentModels {
   custom?: string;
 }
 
+export interface AvailableModelInfo {
+  size?: string;
+  context_window?: number;
+  description?: string;
+}
+
 export interface ProviderConfig {
   label: string;
   description: string;
@@ -64,6 +70,7 @@ export interface ProviderConfig {
   requires_key: boolean;
   key_url?: string;
   default_context_window: number;
+  available_models?: Record<string, AvailableModelInfo>;
   model_context_windows: Record<string, number>;
   agent_models: ProviderAgentModels;
 }
@@ -80,6 +87,7 @@ export interface ModelOption {
   label: string;
   in_vram?: boolean;
   size_gb?: number;
+  context_window?: number;
 }
 
 export type AgentRoleType =
