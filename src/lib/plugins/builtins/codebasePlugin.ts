@@ -8,32 +8,32 @@ export const codebasePlugin: MyfPlugin = {
   id: "codebase-intel",
   name: "Codebase Memory & Map",
   version: "1.0.0",
-  description: "Proje kod haritasını tarar, fonksiyon, sınıf ve interface sembollerini token harcamadan bulur.",
+  description: "Scans the project codebase map, quickly finding functions, classes, and interfaces without wasting tokens.",
   category: "codebase",
   icon: "Cpu",
   enabled: true,
   author: "MYF Agent Core",
 
   systemPromptContribution: () => {
-    return `[EKLENTİ: Codebase Memory & Map]
-Projedeki dosya ve sembolleri hızlıca taramak için 'search_symbols' ve 'get_codebase_summary' araçlarını kullanabilirsin.`;
+    return `[PLUGIN: Codebase Memory & Map]
+Use 'search_symbols' and 'get_codebase_summary' to quickly scan files and symbols in the project without wasting tokens.`;
   },
 
   tools: [
     {
       name: "search_symbols",
-      displayName: "Sembol Ara (Fonksiyon/Sınıf)",
-      description: "Proje genelinde fonksiyon, sınıf, tip veya dosya adına göre arama yapar.",
+      displayName: "Search Symbols (Function/Class)",
+      description: "Searches across the project for functions, classes, types, or file names.",
       parameters: {
         query: {
           type: "string",
-          description: "Aranacak sembol adı veya kelime (örn: 'Coordinator', 'useChat', 'buildPrompt')",
+          description: "Symbol name or search query (e.g. 'Coordinator', 'useChat', 'buildPrompt')",
           required: true,
         },
       },
       execute: async (params, context) => {
         const query = String(params.query || "").trim();
-        if (!query) return { success: false, output: "Arama terimi giriniz." };
+        if (!query) return { success: false, output: "Search query cannot be empty." };
 
         try {
           const map = await buildCodebaseMap(context.projectDir);
@@ -42,14 +42,14 @@ Projedeki dosya ve sembolleri hızlıca taramak için 'search_symbols' ve 'get_c
           if (results.length === 0) {
             return {
               success: true,
-              output: `"${query}" ile eşleşen sembol veya dosya bulunamadı (${map.fileCount} dosya tarandı).`,
+              output: `No symbol or file found matching "${query}" (${map.fileCount} files scanned).`,
             };
           }
 
-          const lines = [`🔎 "${query}" ile eşleşen ${results.length} dosya/sembol:\n`];
+          const lines = [`🔎 ${results.length} files/symbols matching "${query}":\n`];
           results.slice(0, 15).forEach((r) => {
-            const syms = r.symbols.length > 0 ? ` → Semboller: [${r.symbols.slice(0, 8).join(", ")}]` : "";
-            lines.push(`📄 ${r.path} (${r.lines} satır, ${r.lang})${syms}`);
+            const syms = r.symbols.length > 0 ? ` → Symbols: [${r.symbols.slice(0, 8).join(", ")}]` : "";
+            lines.push(`📄 ${r.path} (${r.lines} lines, ${r.lang})${syms}`);
           });
 
           return {
@@ -60,15 +60,15 @@ Projedeki dosya ve sembolleri hızlıca taramak için 'search_symbols' ve 'get_c
         } catch (err) {
           return {
             success: false,
-            output: `Sembol arama hatası: ${err instanceof Error ? err.message : "Hata"}`,
+            output: `Symbol search error: ${err instanceof Error ? err.message : "Error"}`,
           };
         }
       },
     },
     {
       name: "get_codebase_summary",
-      displayName: "Proje Kod Özeti",
-      description: "Tüm projenin kompakt dosya ve sembol haritasını döndürür.",
+      displayName: "Codebase Summary",
+      description: "Returns a compact file and symbol map of the entire project.",
       parameters: {},
       execute: async (_params, context) => {
         try {
@@ -81,7 +81,7 @@ Projedeki dosya ve sembolleri hızlıca taramak için 'search_symbols' ve 'get_c
         } catch (err) {
           return {
             success: false,
-            output: `Kod haritası çıkarılamadı: ${err instanceof Error ? err.message : "Hata"}`,
+            output: `Could not generate codebase map: ${err instanceof Error ? err.message : "Error"}`,
           };
         }
       },

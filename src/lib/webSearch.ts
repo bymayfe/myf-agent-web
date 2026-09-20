@@ -439,19 +439,19 @@ export async function webSearch(
 
 export function formatSearchResultsForLLM(res: WebSearchResponse): string {
   if (res.backend === "error" || res.results.length === 0) {
-    return `[WEB ARAMA: "${res.query}" için sonuç bulunamadı]`;
+    return `[WEB SEARCH: No results found for "${res.query}"]`;
   }
 
-  const lines: string[] = [`## Web Arama Sonuçları: "${res.query}" (${res.backend.toUpperCase()})`];
+  const lines: string[] = [`## Web Search Results: "${res.query}" (${res.backend.toUpperCase()})`];
 
   if (res.answer) {
-    lines.push(`\n**Özet:** ${res.answer}\n`);
+    lines.push(`\n**Summary:** ${res.answer}\n`);
   }
 
   res.results.forEach((r, i) => {
     lines.push(`${i + 1}. **${r.title}**`);
     lines.push(`   ${r.snippet.slice(0, 300)}`);
-    lines.push(`   Kaynak: ${r.url}`);
+    lines.push(`   Source: ${r.url}`);
   });
 
   return lines.join("\n");

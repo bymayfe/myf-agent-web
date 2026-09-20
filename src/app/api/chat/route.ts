@@ -365,7 +365,7 @@ async function runBackgroundSessionTask(params: {
     const baseSystemPrompt = buildSystemPrompt({
       coordinatorName: settings.coordinator_name,
       executionMode: settings.execution_mode,
-      projectContextText: `AKTİF ÇALIŞMA DİZİNİ (PROJE): ${projectDir} (Proje Adı: ${projectName})`,
+      projectContextText: `ACTIVE WORKING DIRECTORY (PROJECT): ${projectDir} (Project Name: ${projectName})`,
     });
 
     const systemParts = [baseSystemPrompt];
@@ -582,22 +582,22 @@ async function runBackgroundSessionTask(params: {
 
       emit("status", "🤖 Araç çıktıları inceleniyor ve sonraki adıma geçiliyor...");
 
-      let guidance = "Araçlar başarıyla çalıştırıldı ve çıktılar kullanıcı ekranına canlı yansıtıldı.\n\n" +
-        `Araç Özetleri:\n${toolResults.join("\n\n")}\n\n` +
-        "ÖNEMLİ KURAL: Terminal veya dosya çıktılarını kullanıcıya tekrar kopyalayıp yazarak token harcama. Doğrudan bu sonuca göre sonraki komutu/aracı çalıştır veya eksiksiz kodlarını ve nihai yanıtını sun.";
+      let guidance = "Tools were executed successfully and outputs were streamed to the user.\n\n" +
+        `Tool Summaries:\n${toolResults.join("\n\n")}\n\n` +
+        "IMPORTANT: Do not waste tokens re-copying terminal or file outputs. Based directly on this result, either run the next command/tool, or produce complete code and your final response in fluent Turkish.";
 
       if (isLooping) {
-        guidance += "\n\n⚠️ UYARI: Bu aracı ve parametreleri az önce zaten çalıştırdın! Aynı dosyayı veya aracı tekrar çağırma. Elde ettiğin verileri kullanarak hemen kodu düzelt veya kullanıcıya bulgularını sunarak görevi tamamla.";
+        guidance += "\n\n⚠️ WARNING: You already executed this exact tool with these parameters! Do not call the same file or tool again. Use the data you already obtained to immediately fix code or complete the task for the user.";
       }
 
       const readOnlyTools = new Set(["list_directory", "get_codebase_summary", "search_symbols", "git_status"]);
       const allReadOnly = toolCalls.every((c) => readOnlyTools.has(c.tool));
       if (allReadOnly && iteration >= 2) {
-        guidance += "\n\n🚨 KRİTİK TALİMAT: Dizin boş veya incelenecek dosya yok. Boş dizini inceleme araçlarıyla tekrar tekrar taramayı DERHAL BIRAK! Kullanıcı senden yeni bir proje veya kod yazmanı istiyor. Hemen gerekli kurulum komutunu ('run_command') çalıştır veya dosyaları ('write_file' / kod bloğu) eksiksiz oluşturmaya başla.";
+        guidance += "\n\n🚨 CRITICAL INSTRUCTION: The directory is empty or has no files to inspect. IMMEDIATELY STOP repeatedly scanning an empty directory with read-only tools! The user wants you to create a new project. Immediately run the scaffolding command ('run_command') or start creating files ('write_file' / code block).";
       }
 
       if (iteration >= MAX_TOOL_ITERATIONS - 1) {
-        guidance += "\n\n⚠️ DİKKAT: Maksimum araç adımı sınırına yaklaşıyorsun. Bu turda ARTIK BAŞKA ARAÇ ÇAĞIRMA. Şimdiye kadar elde ettiğin bulguları özetle ve kullanıcıya eksiksiz nihai yanıtını sun. Eğer adımlar ve derleme başarıyla tamamlandıysa, projenin çalıştığını açıkça belirt; KESİNLİKLE olmayan hayali hatalar uydurma.";
+        guidance += "\n\n⚠️ ATTENTION: Approaching the maximum tool step limit. DO NOT CALL ANY MORE TOOLS on this turn. Summarize all findings and provide your complete final response to the user in fluent Turkish. If steps and build passed successfully, clearly state that the project is working; NEVER fabricate non-existent errors.";
       }
 
       const cleanTurnForLlm = turnContent.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
@@ -619,7 +619,7 @@ async function runBackgroundSessionTask(params: {
             {
               role: "user",
               content:
-                "Maksimum araç adımı sınırına ulaşıldı. Şimdiye kadar çalıştırdığın araçların çıktılarına göre gelinen nihai durumu kullanıcıya eksiksiz, tarafsız ve Türkçe olarak açıkla. ÖNEMLİ: Eğer proje derlemesi/testleri başarıyla tamamlandıysa (hata yoksa), projenin başarıyla çalıştığını ve nasıl test edileceğini netçe yaz. KESİNLİKLE gerçekte var olmayan hayali hatalar uydurma.",
+                "Maximum tool step limit reached. Based on the outputs of the tools executed so far, explain the final project status to the user completely, objectively, and in fluent Turkish. IMPORTANT: If project build/tests succeeded without errors, clearly state that the project is working and explain how to run/test it. NEVER fabricate non-existent errors.",
             },
           ],
           model: effectiveModel,

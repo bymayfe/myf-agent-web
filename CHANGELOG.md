@@ -4,6 +4,18 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.9.0] - 2026-09-20
+
+### 🌐 Sistem Promptlarının İngilizceye Taşınması & Türkçe Çıktı Kuralı
+- **LLM Sistem Promptları ve Mod Tanımları İngilizceye Çevrildi (`coordinator.ts`):**
+  - Qwen2.5-Coder gibi kodlama modellerinin kurallara eksiksiz uyması ve token verimliliği için tüm kural maddeleri (Kural 1-9) İngilizceye dönüştürüldü.
+- **Zorunlu Türkçe İletişim (OUTPUT LANGUAGE):**
+  - Promptun 6. kuralı olarak modelin kullanıcıya daima akıcı Türkçe ile hitap etmesi, kod blokları ve tool call JSON bloklarının İngilizce kalması kuralı eklendi.
+- **Eklentiler ve Araç Dokümantasyonları (`src/lib/plugins/`):**
+  - `pluginManager.ts` ve 8 yerleşik eklentinin (`git`, `fs`, `codebase`, `codebaseMemory`, `web`, `terminal`, `patch`, `testRunner`) tüm sistem açıklamaları ve araç parametreleri İngilizceye uyarlandı.
+- **Döngü Kırıcı Rehberler ve Formatlayıcılar (`route.ts`, `codebaseMap.ts`, `webSearch.ts`):**
+  - Ajanın çok adımlı döngüsünde modele geri beslenen yönlendirme yönergeleri ile kod haritası formatlayıcısı İngilizceye taşındı.
+
 ## [1.8.0] - 2026-09-20
 
 ### 🛡️ Sistem Promptu Mod Entegrasyonu & TypeScript Tip Güvenliği

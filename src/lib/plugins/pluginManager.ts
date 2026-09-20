@@ -120,44 +120,43 @@ class PluginManager {
     if (activePlugins.length === 0) return "";
 
     const lines: string[] = [
-      "=== AKTİF EKLENTİLER VE ARAÇLAR (TOOL USE) ===",
-      "ÖNEMLİ VE KESİN KURALLAR:",
-      "1. Sen komutları, aramaları ve dosya işlemlerini DOĞRUDAN KENDİSİ YÜRÜTEN otonom bir AI ajansın.",
-      "2. ASLA kullanıcıya 'Lütfen şu komutu çalıştırın' veya 'Aşağıdaki komutu girin' deme! İşlemi SEN ```tool_call``` formatında çağıracaksın.",
-      "3. Asla metin olarak sahte 'Parametreler' veya 'query:' yazma! SADECE geçerli JSON ```tool_call``` bloğu üret.",
+      "=== ACTIVE PLUGINS AND TOOLS (TOOL USE) ===",
+      "IMPORTANT AND STRICT RULES:",
+      "1. You are an autonomous AI agent that DIRECTLY EXECUTES commands, searches, and file operations yourself.",
+      "2. NEVER tell the user 'Please run this command' or 'Enter the following command'! YOU MUST issue operations using the ```tool_call``` format.",
+      "3. Never write fake text explanations like 'Parameters' or 'query:'! ONLY produce a valid JSON ```tool_call``` block.",
       "",
-      "ÖRNEK ARAÇ ÇAĞRILARI:",
-      "Kullanıcı: 'İnternetten en güncel Next.js sürümünü araştırır mısın?'",
-      "Asistan:",
+      "EXAMPLE TOOL CALLS:",
+      "User: 'Can you search the web for the latest Next.js version?'",
+      "Assistant:",
       "```tool_call",
       '{"tool": "web_search", "parameters": {"query": "Next.js latest release npm version"}}',
       "```",
       "",
-      "Kullanıcı: 'Proje durumunu ve dosyaları incele'",
-      "Asistan:",
+      "User: 'Inspect project state and files'",
+      "Assistant:",
       "```tool_call",
       '{"tool": "get_codebase_summary", "parameters": {}}',
       "```",
       "",
-      "MEVCUT ARAÇLAR:",
+      "AVAILABLE TOOLS:",
     ];
 
-
     for (const plugin of activePlugins) {
-      lines.push(`\n[Eklenti: ${plugin.name}]`);
+      lines.push(`\n[Plugin: ${plugin.name}]`);
       if (plugin.systemPromptContribution) {
         lines.push(plugin.systemPromptContribution(context));
       }
       for (const tool of plugin.tools) {
         const paramKeys = Object.keys(tool.parameters);
         const paramsDesc = paramKeys.length > 0
-          ? paramKeys.map((k) => `    * ${k} (${tool.parameters[k].type}${tool.parameters[k].required ? ", zorunlu" : ""}): ${tool.parameters[k].description}`).join("\n")
-          : "    (Parametre gerekmez)";
-        lines.push(`  - Araç: \`${tool.name}\` — ${tool.description}\n    Parametreler:\n${paramsDesc}`);
+          ? paramKeys.map((k) => `    * ${k} (${tool.parameters[k].type}${tool.parameters[k].required ? ", required" : ""}): ${tool.parameters[k].description}`).join("\n")
+          : "    (No parameters required)";
+        lines.push(`  - Tool: \`${tool.name}\` — ${tool.description}\n    Parameters:\n${paramsDesc}`);
       }
     }
 
-    lines.push("\nBir araç çalıştırdığında sonucu sistem sana iletecek, ardından nihai cevabını verebilirsin.");
+    lines.push("\nWhen you execute a tool, the system will return the result. Then provide your final answer to the user.");
     return lines.join("\n");
   }
 

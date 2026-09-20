@@ -8,56 +8,56 @@ export const webPlugin: MyfPlugin = {
   id: "web-intel",
   name: "Web Intelligence & Search",
   version: "1.0.0",
-  description: "Tavily AI ve DuckDuckGo ile canlı internet araması yapar, web sayfalarını okur.",
+  description: "Performs live web searches via Tavily AI and DuckDuckGo, reads web page contents.",
   category: "search",
   icon: "Globe",
   enabled: true,
   author: "MYF Agent Core",
 
   systemPromptContribution: () => {
-    return `[EKLENTİ: Web Intelligence & Search]
-İnternette güncel bilgi, kütüphane dokümantasyonu veya web araştırması gerektiğinde 'web_search' veya 'fetch_webpage' araçlarını kullanabilirsin.`;
+    return `[PLUGIN: Web Intelligence & Search]
+Use 'web_search' or 'fetch_webpage' when up-to-date documentation, external packages, or internet research is needed.`;
   },
 
   tools: [
     {
       name: "web_search",
-      displayName: "Web Araması",
-      description: "İnternette arama yapar ve özet sonuçlar ile kaynak linkleri döndürür.",
+      displayName: "Web Search",
+      description: "Searches the internet and returns summary results with source links.",
       parameters: {
         query: {
           type: "string",
-          description: "Aranacak anahtar kelimeler veya soru",
+          description: "Keywords or question to search",
           required: true,
         },
         maxResults: {
           type: "number",
-          description: "Döndürülecek maksimum sonuç sayısı (varsayılan: 5)",
+          description: "Maximum number of results to return (default: 5)",
           default: 5,
         },
       },
       execute: async (params) => {
         const query = String(params.query || "").trim();
         if (!query) {
-          return { success: false, output: "Arama sorgusu boş olamaz." };
+          return { success: false, output: "Search query cannot be empty." };
         }
         const maxResults = typeof params.maxResults === "number" ? params.maxResults : 5;
         const res = await webSearch(query, { maxResults });
 
         if (res.backend === "error") {
-          return { success: false, output: `Arama hatası: ${res.error}` };
+          return { success: false, output: `Search error: ${res.error}` };
         }
 
         const lines = [
-          `🔍 Web Araması: "${res.query}" (${res.backend.toUpperCase()} - ${res.results.length} sonuç)`,
+          `🔍 Web Search: "${res.query}" (${res.backend.toUpperCase()} - ${res.results.length} results)`,
         ];
         if (res.answer) {
-          lines.push(`\n**Özet Cevap:** ${res.answer}\n`);
+          lines.push(`\n**Summary:** ${res.answer}\n`);
         }
         res.results.forEach((r, i) => {
           lines.push(`${i + 1}. **${r.title}**`);
           lines.push(`   ${r.snippet}`);
-          lines.push(`   Kaynak: ${r.url}`);
+          lines.push(`   Source: ${r.url}`);
         });
 
         return {
@@ -69,19 +69,19 @@ export const webPlugin: MyfPlugin = {
     },
     {
       name: "fetch_webpage",
-      displayName: "Web Sayfası Oku",
-      description: "Belirtilen bir URL'in metin içeriğini çeker ve markdown olarak döner.",
+      displayName: "Fetch Webpage",
+      description: "Fetches the text content of a given URL and returns it as markdown.",
       parameters: {
         url: {
           type: "string",
-          description: "Okunacak web sayfasının tam adresi (http/https)",
+          description: "Full URL of the webpage to read (http/https)",
           required: true,
         },
       },
       execute: async (params) => {
         const targetUrl = String(params.url || "").trim();
         if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
-          return { success: false, output: "Geçerli bir http veya https URL adresi girin." };
+          return { success: false, output: "Please enter a valid http or https URL address." };
         }
 
         try {
@@ -89,7 +89,7 @@ export const webPlugin: MyfPlugin = {
             headers: { "User-Agent": "Mozilla/5.0 (compatible; MYF-Agent/1.0)" },
           });
           if (!res.ok) {
-            return { success: false, output: `Sayfa alınamadı: HTTP ${res.status}` };
+            return { success: false, output: `Failed to fetch page: HTTP ${res.status}` };
           }
           const html = await res.text();
           // Basit HTML etiket temizleme
@@ -103,12 +103,12 @@ export const webPlugin: MyfPlugin = {
 
           return {
             success: true,
-            output: `📄 URL: ${targetUrl}\n\nİçerik Özeti:\n${text}`,
+            output: `📄 URL: ${targetUrl}\n\nContent Summary:\n${text}`,
           };
         } catch (err) {
           return {
             success: false,
-            output: `Sayfa okunurken hata oluştu: ${err instanceof Error ? err.message : "Bilinmeyen hata"}`,
+            output: `Error reading page: ${err instanceof Error ? err.message : "Unknown error"}`,
           };
         }
       },

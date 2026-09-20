@@ -162,11 +162,11 @@ export async function buildCodebaseMap(projectDir: string): Promise<CodebaseMap>
 /** Kompakt proje haritasını LLM sistem promptuna enjekte edilecek formata dönüştür.
  *  Token tasarrufu için semboller satır-inline gösterilir. */
 export function formatMapForLLM(map: CodebaseMap, maxFiles = 60): string {
-  if (map.fileCount === 0) return "(Proje henüz boş — incelenecek dosya veya sembol yok. Yeni proje oluşturuyorsan arama yapmayı bırak ve doğrudan dosyaları yazmaya başla.)";
+  if (map.fileCount === 0) return "(Project is currently empty — no files or symbols to inspect. If creating a new project, stop searching and start writing files directly.)";
 
   const lines: string[] = [
-    `=== PROJE KOD HARİTASI (${map.fileCount} dosya · ${map.totalLines.toLocaleString()} satır) ===`,
-    `Dizin: ${map.projectDir}`,
+    `=== PROJECT CODEBASE MAP (${map.fileCount} files · ${map.totalLines.toLocaleString()} lines) ===`,
+    `Directory: ${map.projectDir}`,
     "",
   ];
 
@@ -180,11 +180,11 @@ export function formatMapForLLM(map: CodebaseMap, maxFiles = 60): string {
   }
 
   if (map.fileCount > maxFiles) {
-    lines.push(`  ... ve ${map.fileCount - maxFiles} dosya daha`);
+    lines.push(`  ... and ${map.fileCount - maxFiles} more files`);
   }
 
   lines.push("");
-  lines.push('(Detay için: "X dosyasını göster" yaz)');
+  lines.push('(For details: request to inspect a specific file)');
 
   return lines.join("\n");
 }

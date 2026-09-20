@@ -7,38 +7,38 @@ import path from "path";
 
 export const patchPlugin: MyfPlugin = {
   id: "patch-engine",
-  name: "Cerrahi Yama & Diff Motoru",
+  name: "Surgical Patch & Diff Engine",
   version: "1.0.0",
-  description: "Dosyaları baştan yazmak yerine sadece belirli satırları cerrahi olarak arar ve değiştirir.",
+  description: "Surgically searches and replaces specific lines instead of rewriting entire files.",
   category: "filesystem",
   icon: "FileCode",
   enabled: true,
   author: "MYF Agent Core",
 
   systemPromptContribution: () => {
-    return `[EKLENTİ: Cerrahi Yama & Diff Motoru]
-Büyük bir dosyada sadece birkaç satırı değiştirmek için dosyanın tamamını baştan yazmak yerine 'search_and_replace' aracını kullanabilirsin.`;
+    return `[PLUGIN: Surgical Patch & Diff Engine]
+To modify only a few lines in a large file, use 'search_and_replace' instead of rewriting the entire file.`;
   },
 
   tools: [
     {
       name: "search_and_replace",
-      displayName: "Ara ve Değiştir (Cerrahi Yama)",
-      description: "Belirtilen dosya içinde hedef metin bloğunu arar ve yeni içerikle değiştirir.",
+      displayName: "Search and Replace (Surgical Patch)",
+      description: "Searches for a target block of text within the specified file and replaces it with new content.",
       parameters: {
         path: {
           type: "string",
-          description: "Değiştirilecek dosya yolu (örn: 'src/app/page.tsx')",
+          description: "Path of the file to modify (e.g. 'src/app/page.tsx')",
           required: true,
         },
         search_block: {
           type: "string",
-          description: "Dosyada aranacak ve değiştirilecek tam metin bloğu",
+          description: "Exact block of text in the file to search and replace",
           required: true,
         },
         replace_block: {
           type: "string",
-          description: "Hedef bloğun yerine yazılacak yeni metin bloğu",
+          description: "New block of text to replace the target block",
           required: true,
         },
       },
@@ -47,8 +47,8 @@ Büyük bir dosyada sadece birkaç satırı değiştirmek için dosyanın tamam�
         const searchBlock = String(params.search_block || "");
         const replaceBlock = String(params.replace_block || "");
 
-        if (!relPath) return { success: false, output: "Dosya yolu belirtilmedi." };
-        if (!searchBlock) return { success: false, output: "Arama bloğu boş olamaz." };
+        if (!relPath) return { success: false, output: "File path is required." };
+        if (!searchBlock) return { success: false, output: "Search block cannot be empty." };
 
         const rootDir = context.projectDir || process.cwd();
         const fullPath = path.isAbsolute(relPath) ? relPath : path.resolve(rootDir, relPath);
@@ -58,7 +58,7 @@ Büyük bir dosyada sadece birkaç satırı değiştirmek için dosyanın tamam�
           if (!content.includes(searchBlock)) {
             return {
               success: false,
-              output: `Hedef arama bloğu dosyada (${relPath}) bulunamadı. Lütfen tam satırları kontrol edin.`,
+              output: `Target search block not found in file (${relPath}). Please verify the exact lines.`,
             };
           }
 
@@ -67,11 +67,11 @@ Büyük bir dosyada sadece birkaç satırı değiştirmek için dosyanın tamam�
 
           return {
             success: true,
-            output: `Dosya (${relPath}) başarıyla cerrahi olarak yamalandı ve güncellendi.`,
+            output: `File (${relPath}) was surgically patched and updated successfully.`,
           };
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
-          return { success: false, output: `Yama uygulanamadı: ${msg}` };
+          return { success: false, output: `Patch failed: ${msg}` };
         }
       },
     },

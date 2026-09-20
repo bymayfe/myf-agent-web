@@ -6,28 +6,28 @@ import { runStreamingCommand } from "./terminalPlugin";
 
 export const testRunnerPlugin: MyfPlugin = {
   id: "test-runner",
-  name: "Test Koşucu & Sentaks Denetçisi",
+  name: "Test Runner & Syntax Checker",
   version: "1.0.0",
-  description: "Projedeki birim testleri (pytest, npm test, vitest) çalıştırır ve sentaks hatalarını denetler.",
+  description: "Runs unit tests (pytest, npm test, vitest) and checks syntax errors in the project.",
   category: "terminal",
   icon: "CheckCircle2",
   enabled: true,
   author: "MYF Agent Core",
 
   systemPromptContribution: () => {
-    return `[EKLENTİ: Test Koşucu & Sentaks Denetçisi]
-Kod değişikliklerinden sonra testleri doğrulamak veya sentaks hatalarını yakalamak için 'run_unit_tests' aracını kullanabilirsin.`;
+    return `[PLUGIN: Test Runner & Syntax Checker]
+Use 'run_unit_tests' to validate tests or detect syntax errors after code changes.`;
   },
 
   tools: [
     {
       name: "run_unit_tests",
-      displayName: "Birim Testlerini Koş",
-      description: "Proje dizinindeki test komutunu (npm test, pytest vb.) çalıştırır ve sonuçları raporlar.",
+      displayName: "Run Unit Tests",
+      description: "Executes test runner commands (npm test, pytest, etc.) in the project directory and reports results.",
       parameters: {
         framework: {
           type: "string",
-          description: "Test aracı ('npm_test', 'pytest', 'vitest' veya özel komut)",
+          description: "Test framework ('npm_test', 'pytest', 'vitest', or custom command)",
           default: "npm_test",
         },
       },

@@ -7,34 +7,34 @@ import path from "path";
 
 export const fsPlugin: MyfPlugin = {
   id: "fs-ops",
-  name: "Dosya Sistemi (FS Tools)",
+  name: "File System (FS Tools)",
   version: "1.0.0",
-  description: "Proje dizinindeki dosyaları güvenli bir şekilde okur, yazar ve listeler.",
+  description: "Safely reads, writes, and lists files in the project directory.",
   category: "filesystem",
   icon: "Files",
   enabled: true,
   author: "MYF Agent Core",
 
   systemPromptContribution: () => {
-    return `[EKLENTİ: Dosya Sistemi (FS Tools)]
-Projedeki dosyaları okumak için 'read_file', yeni dosya kaydetmek/düzenlemek için 'write_file', klasör listelemek için 'list_directory' araçlarını kullanabilirsin.`;
+    return `[PLUGIN: File System (FS Tools)]
+Use 'read_file' to inspect file content, 'write_file' to create or update files, and 'list_directory' to list files and folders.`;
   },
 
   tools: [
     {
       name: "read_file",
-      displayName: "Dosya Oku",
-      description: "Belirtilen dosyanın içeriğini okur.",
+      displayName: "Read File",
+      description: "Reads the content of the specified file.",
       parameters: {
         filePath: {
           type: "string",
-          description: "Okunacak dosyanın proje dizinine göre göreceli veya mutlak yolu",
+          description: "Relative or absolute path of the file to read",
           required: true,
         },
       },
       execute: async (params, context) => {
         const rawPath = String(params.filePath || params.path || params.file || "").trim();
-        if (!rawPath) return { success: false, output: "Dosya yolu belirtilmeli." };
+        if (!rawPath) return { success: false, output: "File path is required." };
 
         const target = path.isAbsolute(rawPath) ? rawPath : path.join(context.projectDir, rawPath);
         try {
@@ -43,41 +43,41 @@ Projedeki dosyaları okumak için 'read_file', yeni dosya kaydetmek/düzenlemek 
           if (lines.length > 800) {
             return {
               success: true,
-              output: `📄 Dosya: ${rawPath} (${lines.length} satır - ilk 800 satır gösteriliyor):\n\n` + lines.slice(0, 800).join("\n"),
+              output: `📄 File: ${rawPath} (${lines.length} lines — showing first 800):\n\n` + lines.slice(0, 800).join("\n"),
             };
           }
           return {
             success: true,
-            output: `📄 Dosya: ${rawPath} (${lines.length} satır):\n\n${content}`,
+            output: `📄 File: ${rawPath} (${lines.length} lines):\n\n${content}`,
           };
         } catch (err) {
           return {
             success: false,
-            output: `Dosya okunamadı: ${err instanceof Error ? err.message : "Hata"}`,
+            output: `Could not read file: ${err instanceof Error ? err.message : "Error"}`,
           };
         }
       },
     },
     {
       name: "write_file",
-      displayName: "Dosya Yaz / Güncelle",
-      description: "Belirtilen dosyayı oluşturur veya günceller.",
+      displayName: "Write / Update File",
+      description: "Creates or overwrites the specified file with the given content.",
       parameters: {
         filePath: {
           type: "string",
-          description: "Yazılacak dosyanın yolu",
+          description: "Path of the file to write",
           required: true,
         },
         content: {
           type: "string",
-          description: "Dosyaya yazılacak tam kod veya metin içeriği",
+          description: "Complete code or text content to write to the file",
           required: true,
         },
       },
       execute: async (params, context) => {
         const rawPath = String(params.filePath || params.path || params.file || "").trim();
         const content = String(params.content ?? "");
-        if (!rawPath) return { success: false, output: "Dosya yolu belirtilmeli." };
+        if (!rawPath) return { success: false, output: "File path is required." };
 
         const target = path.isAbsolute(rawPath) ? rawPath : path.join(context.projectDir, rawPath);
         try {
@@ -86,24 +86,24 @@ Projedeki dosyaları okumak için 'read_file', yeni dosya kaydetmek/düzenlemek 
           const lines = content.split("\n").length;
           return {
             success: true,
-            output: `✅ Dosya başarıyla kaydedildi: ${rawPath} (${lines} satır)`,
+            output: `✅ File saved successfully: ${rawPath} (${lines} lines)`,
           };
         } catch (err) {
           return {
             success: false,
-            output: `Dosya yazılamadı: ${err instanceof Error ? err.message : "Hata"}`,
+            output: `Could not write file: ${err instanceof Error ? err.message : "Error"}`,
           };
         }
       },
     },
     {
       name: "list_directory",
-      displayName: "Dizin Listele",
-      description: "Belirtilen klasörün içindeki dosya ve alt klasörleri listeler.",
+      displayName: "List Directory",
+      description: "Lists files and subdirectories in the specified directory.",
       parameters: {
         dirPath: {
           type: "string",
-          description: "Listelenecek klasör yolu (varsayılan: proje kök dizini)",
+          description: "Directory path to list (default: project root)",
         },
       },
       execute: async (params, context) => {
@@ -115,12 +115,12 @@ Projedeki dosyaları okumak için 'read_file', yeni dosya kaydetmek/düzenlemek 
           const items = entries.map((e) => `${e.isDirectory() ? "📁" : "📄"} ${e.name}`);
           return {
             success: true,
-            output: `📂 Dizin: ${rawPath || "."}\n` + (items.join("\n") || "(Dizin boş — incelenecek dosya yok. Yeni proje oluşturuyorsan arama yapmayı bırak ve dosyaları oluşturmaya başla.)"),
+            output: `📂 Directory: ${rawPath || "."}\n` + (items.join("\n") || "(Directory is empty — no files to inspect. If creating a new project, stop searching and start creating files.)"),
           };
         } catch (err) {
           return {
             success: false,
-            output: `Dizin listelenemedi: ${err instanceof Error ? err.message : "Hata"}`,
+            output: `Could not list directory: ${err instanceof Error ? err.message : "Error"}`,
           };
         }
       },
